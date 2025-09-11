@@ -175,8 +175,7 @@
         calledNames = rawCalled ? JSON.parse(rawCalled) : [];
         renderCalledList();
         updateCounts();
-        namesInput.value = allNames.join('
-');
+        namesInput.value = allNames.join('\n');
       }catch(e){
         console.error('storage load error', e);
       }
@@ -191,8 +190,7 @@
       const raw = namesInput.value.trim();
       if(!raw) return [];
       // 支持换行、逗号、分号分隔
-      const items = raw.split(/[
-,;，；]+/).map(s=>s.trim()).filter(Boolean);
+      const items = raw.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
       return Array.from(new Set(items)); // 去重
     }
 
@@ -211,8 +209,7 @@
         const right = document.createElement('div');
         right.style.display='flex';right.style.gap='8px';
         const rm = document.createElement('button'); rm.textContent='移除'; rm.className='small ghost';
-        rm.onclick = ()=>{ calledNames.splice(idx,1); allNames.push(name); saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('
-'); }
+        rm.onclick = ()=>{ calledNames.splice(idx,1); allNames.push(name); saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n'); }
         right.appendChild(rm);
         div.appendChild(left);
         div.appendChild(right);
@@ -234,8 +231,7 @@
         [allNames[i], allNames[j]] = [allNames[j], allNames[i]];
       }
       nameDisplay.textContent = '名单已打乱';
-      namesInput.value = allNames.join('
-');
+      namesInput.value = allNames.join('\n');
       saveToStorage();
     }
 
@@ -300,28 +296,24 @@
       const candidate = sel || nameDisplay.textContent;
       if(!candidate) return alert('未检测到姓名可标记');
       // 支持多行
-      const items = candidate.split(/[
-,;，；]+/).map(s=>s.trim()).filter(Boolean);
+      const items = candidate.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
       items.forEach(it=>{
         const idx = allNames.indexOf(it);
         if(idx!==-1) allNames.splice(idx,1);
         if(!calledNames.includes(it)) calledNames.unshift(it);
       });
-      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('
-');
+      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
     }
 
     copyCalled.onclick = async ()=>{
       try{
-        await navigator.clipboard.writeText(calledNames.join('
-'));
+        await navigator.clipboard.writeText(calledNames.join('\n'));
         alert('已复制到剪贴板');
       }catch(e){ alert('复制失败，请手动选择并复制。'); }
     }
 
     exportCalled.onclick = ()=>{
-      const blob = new Blob([calledNames.join('
-')], {type:'text/plain;charset=utf-8'});
+      const blob = new Blob([calledNames.join('\n')], {type:'text/plain;charset=utf-8'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = 'called_names.txt';
@@ -333,8 +325,7 @@
       // 把已点名单放回待点名单尾部
       allNames = allNames.concat(calledNames);
       calledNames = [];
-      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('
-');
+      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
     }
 
     // 页面离开时自动保存当前 textarea
