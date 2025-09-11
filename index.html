@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>点名器（GitHub Pages 可部署）</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--glass: rgba(255,255,255,0.03)}
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,'Noto Sans SC',"Helvetica Neue","PingFang SC",Arial; background: linear-gradient(180deg,#071024 0%, #081926 100%);color:#e6eef8}
+    .app{max-width:980px;margin:28px auto;padding:20px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 6px 30px rgba(2,6,23,0.7)}
+    header{display:flex;align-items:center;justify-content:space-between}
+    h1{margin:0;font-size:18px}
+    .row{display:flex;gap:18px;margin-top:16px}
+    .col{flex:1;min-width:0}
+    .card{background:var(--card);padding:14px;border-radius:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
+    textarea{name;height:160px;width:100%;resize:vertical;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);color:inherit}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    button{border:0;padding:9px 12px;border-radius:8px;background:var(--accent);color:#03203a;font-weight:600;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);font-weight:500}
+    .big{padding:14px 18px;font-size:16px}
+    .viewer{display:flex;flex-direction:column;align-items:center;justify-content:center;height:220px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));}
+    .name-display{font-size:36px;font-weight:700;transition:filter 160ms linear, transform 160ms linear, opacity 160ms linear}
+    .blur{filter: blur(6px) saturate(1.05) contrast(1.02);transform:scale(1.02);opacity:0.9}
+    .meta{display:flex;gap:10px;align-items:center;margin-top:12px;color:var(--muted);font-size:13px}
+    .called-list{max-height:360px;overflow:auto;padding:8px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent)}
+    .called-item{display:flex;justify-content:space-between;padding:8px;border-radius:6px;margin-bottom:6px;background:rgba(0,0,0,0.12)}
+    .muted{color:var(--muted)}
+    .small{font-size:13px;padding:6px 8px}
+    .flex-between{display:flex;justify-content:space-between;align-items:center}
+    .kbd{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;font-family:monospace;font-size:13px}
+    footer{margin-top:12px;color:var(--muted);font-size:13px}
+    @media (max-width:760px){.row{flex-direction:column}.viewer{height:180px}.name-display{font-size:26px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>点名器 — 静态页面 (适用于 GitHub Pages)</h1>
+      <div class="muted">本地保存：localStorage</div>
+    </header>
+
+    <div class="row" style="margin-top:18px">
+      <div class="col">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>名单输入（每行一个姓名）</strong>
+            <div class="muted">可粘贴 / 编辑 / 导入</div>
+          </div>
+          <textarea id="namesInput" placeholder="示例：\n张三\n李四\n王五"></textarea>
+          <div class="controls">
+            <button id="loadNames">加载名单</button>
+            <button id="shuffle" class="ghost">打乱顺序</button>
+            <button id="clearAll" class="ghost">清空名单</button>
+            <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+              <div class="kbd" id="totalCount">总数: 0</div>
+              <div class="kbd" id="remainingCount">剩余: 0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="viewer">
+            <div id="nameDisplay" class="name-display muted">点击“开始滚动”开始</div>
+            <div class="meta">
+              <div>当前模式：<span id="modeLabel">顺序 / 随机</span></div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:10px">
+              <button id="startBtn" class="big">开始滚动</button>
+              <button id="stopBtn" class="big ghost" disabled>停止</button>
+              <button id="markBtn" class="big ghost">手动标记</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="col" style="flex:0.6">
+        <div class="card">
+          <div class="flex-between"><strong>已点名单</strong>
+            <div style="display:flex;gap:8px">
+              <button id="copyCalled" class="small ghost">复制</button>
+              <button id="exportCalled" class="small">导出</button>
+              <button id="clearCalled" class="small ghost">清除</button>
+            </div>
+          </div>
+          <div class="called-list" id="calledList"></div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="flex-between"><strong>操作记录 / 保存</strong>
+            <div class="muted">自动保存在浏览器</div>
+          </div>
+          <div style="margin-top:8px;color:var(--muted);font-size:13px">
+            • 页面会在 localStorage 中保存已点名单与原始名单；可在不同会话中继续使用。<br>
+            • 若需跨设备保存，请导出已点名单后手动同步文件。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>说明：本页面为单页静态应用，直接将 <code>index.html</code> 放置于 GitHub 仓库根目录并启用 Pages 即可部署。</footer>
+  </div>
+
+  <script>
+    // 简单的单页点名器逻辑（无依赖，适合 GitHub Pages）
+    const namesInput = document.getElementById('namesInput');
+    const loadNamesBtn = document.getElementById('loadNames');
+    const shuffleBtn = document.getElementById('shuffle');
+    const clearAllBtn = document.getElementById('clearAll');
+    const totalCount = document.getElementById('totalCount');
+    const remainingCount = document.getElementById('remainingCount');
+    const nameDisplay = document.getElementById('nameDisplay');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const markBtn = document.getElementById('markBtn');
+    const calledListEl = document.getElementById('calledList');
+    const copyCalled = document.getElementById('copyCalled');
+    const exportCalled = document.getElementById('exportCalled');
+    const clearCalled = document.getElementById('clearCalled');
+    const modeLabel = document.getElementById('modeLabel');
+
+    // Storage keys
+    const STORAGE_ALL = 'rollcall_all_names_v1';
+    const STORAGE_CALLED = 'rollcall_called_names_v1';
+
+    let allNames = []; // 未点或待点名单
+    let calledNames = []; // 已点名单
+    let rolling = false;
+    let intervalId = null;
+    let lastShown = '';
+    let modeRandom = true; // 默认随机
+
+    // 初始化：从 localStorage 读取
+    function loadFromStorage(){
+      try{
+        const rawAll = localStorage.getItem(STORAGE_ALL);
+        const rawCalled = localStorage.getItem(STORAGE_CALLED);
+        allNames = rawAll ? JSON.parse(rawAll) : [];
+        calledNames = rawCalled ? JSON.parse(rawCalled) : [];
+        renderCalledList();
+        updateCounts();
+        namesInput.value = allNames.join('\n');
+      }catch(e){
+        console.error('storage load error', e);
+      }
+    }
+
+    function saveToStorage(){
+      localStorage.setItem(STORAGE_ALL, JSON.stringify(allNames));
+      localStorage.setItem(STORAGE_CALLED, JSON.stringify(calledNames));
+    }
+
+    function parseInput(){
+      const raw = namesInput.value.trim();
+      if(!raw) return [];
+      // 支持换行、逗号、分号分隔
+      const items = raw.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
+      return Array.from(new Set(items)); // 去重
+    }
+
+    function updateCounts(){
+      totalCount.textContent = '总数: ' + (allNames.length + calledNames.length);
+      remainingCount.textContent = '剩余: ' + (allNames.length);
+    }
+
+    function renderCalledList(){
+      calledListEl.innerHTML = '';
+      calledNames.forEach((name, idx)=>{
+        const div = document.createElement('div');
+        div.className = 'called-item';
+        const left = document.createElement('div');
+        left.textContent = name;
+        const right = document.createElement('div');
+        right.style.display='flex';right.style.gap='8px';
+        const rm = document.createElement('button'); rm.textContent='移除'; rm.className='small ghost';
+        rm.onclick = ()=>{ calledNames.splice(idx,1); allNames.push(name); saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n'); }
+        right.appendChild(rm);
+        div.appendChild(left);
+        div.appendChild(right);
+        calledListEl.appendChild(div);
+      });
+    }
+
+    loadNamesBtn.onclick = ()=>{
+      const parsed = parseInput();
+      allNames = parsed.filter(n => !calledNames.includes(n));
+      saveToStorage();
+      updateCounts();
+      nameDisplay.textContent = '名单已加载';
+    }
+
+    shuffleBtn.onclick = ()=>{
+      for(let i=allNames.length-1;i>0;i--){
+        const j = Math.floor(Math.random()*(i+1));
+        [allNames[i], allNames[j]] = [allNames[j], allNames[i]];
+      }
+      nameDisplay.textContent = '名单已打乱';
+      namesInput.value = allNames.join('\n');
+      saveToStorage();
+    }
+
+    clearAllBtn.onclick = ()=>{
+      if(!confirm('确认清空全部待点名单吗？此操作不会删除已点名单。')) return;
+      allNames = [];
+      namesInput.value = '';
+      updateCounts();
+      saveToStorage();
+      nameDisplay.textContent = '已清空';
+    }
+
+    startBtn.onclick = ()=>{
+      if(rolling) return;
+      // 若当前输入框未加载到存量，则尝试加载
+      if(allNames.length === 0){
+        const parsed = parseInput();
+        if(parsed.length===0){ alert('名单为空，请先粘贴或加载名单。'); return; }
+        allNames = parsed.filter(n => !calledNames.includes(n));
+        saveToStorage();
+      }
+      rolling = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      nameDisplay.classList.add('blur');
+      modeRandom = true; // 进入滚动时默认随机
+      modeLabel.textContent = '随机';
+      intervalId = setInterval(()=>{
+        if(allNames.length===0){ nameDisplay.textContent = '无候选'; return; }
+        // 随机取一个但不立即移除，选择时在 stop 时处理
+        const pick = allNames[Math.floor(Math.random()*allNames.length)];
+        lastShown = pick;
+        nameDisplay.textContent = pick;
+      }, 60);
+    }
+
+    stopBtn.onclick = ()=>{
+      if(!rolling) return;
+      rolling = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      nameDisplay.classList.remove('blur');
+      if(intervalId) clearInterval(intervalId);
+      // 选中当前显示的名字
+      const chosen = lastShown || nameDisplay.textContent;
+      if(!chosen || chosen==='点击“开始滚动”开始' || chosen==='名单已加载' || chosen==='无候选'){
+        nameDisplay.textContent = '未能选中有效姓名';
+        return;
+      }
+      // 将选中者从 allNames 移到 calledNames
+      const idx = allNames.indexOf(chosen);
+      if(idx!==-1) allNames.splice(idx,1);
+      if(!calledNames.includes(chosen)) calledNames.unshift(chosen);
+      saveToStorage();
+      renderCalledList();
+      updateCounts();
+    }
+
+    markBtn.onclick = ()=>{
+      // 手动将当前输入框中的所选文本作为已点（若光标选中有文本，则用选中文本，否则用展示区当前文本）
+      const sel = window.getSelection().toString().trim();
+      const candidate = sel || nameDisplay.textContent;
+      if(!candidate) return alert('未检测到姓名可标记');
+      // 支持多行
+      const items = candidate.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
+      items.forEach(it=>{
+        const idx = allNames.indexOf(it);
+        if(idx!==-1) allNames.splice(idx,1);
+        if(!calledNames.includes(it)) calledNames.unshift(it);
+      });
+      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
+    }
+
+    copyCalled.onclick = async ()=>{
+      try{
+        await navigator.clipboard.writeText(calledNames.join('\n'));
+        alert('已复制到剪贴板');
+      }catch(e){ alert('复制失败，请手动选择并复制。'); }
+    }
+
+    exportCalled.onclick = ()=>{
+      const blob = new Blob([calledNames.join('\n')], {type:'text/plain;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'called_names.txt';
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    clearCalled.onclick = ()=>{
+      if(!confirm('确认清除已点名单？此操作不可恢复。')) return;
+      // 把已点名单放回待点名单尾部
+      allNames = allNames.concat(calledNames);
+      calledNames = [];
+      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
+    }
+
+    // 页面离开时自动保存当前 textarea
+    window.addEventListener('beforeunload', ()=>{
+      const parsed = parseInput();
+      // 将当前 textarea 写回 allNames（以防编辑还没点加载）
+      if(parsed.length>0){
+        allNames = parsed.filter(n => !calledNames.includes(n));
+      }
+      saveToStorage();
+    });
+
+    // 初次加载
+    loadFromStorage();
+
+  </script>
+</body>
+</html>
