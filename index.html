@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>点名器（GitHub Pages 可部署）</title>
   <style>
-    :root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--glass: rgba(255,255,255,0.03)}
-    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,'Noto Sans SC',"Helvetica Neue","PingFang SC",Arial; background: linear-gradient(180deg,#071024 0%, #081926 100%);color:#e6eef8}
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--glass: rgba(255,255,255,0.03);--text:#e6eef8}
+    /* 白天主题覆盖 */
+    .light-theme{ --bg: #f6fafc; --card: #ffffff; --accent: #2563eb; --muted: #4b5563; --glass: rgba(2,6,23,0.03); --text: #0b1220 }
+
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,'Noto Sans SC',"Helvetica Neue","PingFang SC",Arial; background: linear-gradient(180deg,var(--bg) 0%, rgba(0,0,0,0) 100%);color:var(--text);transition:background-color 240ms linear,color 240ms linear}
     .app{max-width:980px;margin:28px auto;padding:20px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 6px 30px rgba(2,6,23,0.7)}
     header{display:flex;align-items:center;justify-content:space-between}
     h1{margin:0;font-size:18px}
@@ -15,7 +18,7 @@
     .card{background:var(--card);padding:14px;border-radius:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
     textarea{name;height:160px;width:100%;resize:vertical;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);color:inherit}
     .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-    button{border:0;padding:9px 12px;border-radius:8px;background:var(--accent);color:#03203a;font-weight:600;cursor:pointer}
+    button{border:0;padding:9px 12px;border-radius:8px;background:var(--accent);color:var(--card);font-weight:600;cursor:pointer}
     button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);font-weight:500}
     .big{padding:14px 18px;font-size:16px}
     .viewer{display:flex;flex-direction:column;align-items:center;justify-content:center;height:220px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));}
@@ -23,12 +26,13 @@
     .blur{filter: blur(6px) saturate(1.05) contrast(1.02);transform:scale(1.02);opacity:0.9}
     .meta{display:flex;gap:10px;align-items:center;margin-top:12px;color:var(--muted);font-size:13px}
     .called-list{max-height:360px;overflow:auto;padding:8px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent)}
-    .called-item{display:flex;justify-content:space-between;padding:8px;border-radius:6px;margin-bottom:6px;background:rgba(0,0,0,0.12)}
+    .called-item{display:flex;justify-content:space-between;padding:8px;border-radius:6px;margin-bottom:6px;background:rgba(0,0,0,0.06)}
     .muted{color:var(--muted)}
     .small{font-size:13px;padding:6px 8px}
     .flex-between{display:flex;justify-content:space-between;align-items:center}
     .kbd{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;font-family:monospace;font-size:13px}
     footer{margin-top:12px;color:var(--muted);font-size:13px}
+    .theme-toggle{background:transparent;border:0;font-size:18px;cursor:pointer;padding:6px;border-radius:8px}
     @media (max-width:760px){.row{flex-direction:column}.viewer{height:180px}.name-display{font-size:26px}}
   </style>
 </head>
@@ -36,7 +40,10 @@
   <div class="app">
     <header>
       <h1>点名器</h1>
-      <div class="muted">本地保存</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="muted" style="margin-right:6px">本地保存</div>
+        <button id="themeToggle" class="theme-toggle" title="切换白天/夜间主题" aria-label="切换主题">🌙</button>
+      </div>
     </header>
 
     <div class="row" style="margin-top:18px">
@@ -91,7 +98,7 @@
             <div class="muted">自动保存在浏览器</div>
           </div>
           <div style="margin-top:8px;color:var(--muted);font-size:13px">
-            • 页面会在本地（<code>localStorage</code>）保存已点名单与原始名单；可在不同会话中继续使用。<br>
+            • 页面会在本地（<code>localStorage</code>)中保存已点名单与原始名单；可在不同会话中继续使用。<br>
             • 若需跨设备保存，请导出已点名单后手动同步文件。
           </div>
         </div>
@@ -101,6 +108,36 @@
   </div>
 
   <script>
+    // 主题切换：支持 白天 / 夜间，保存在 localStorage
+    const THEME_KEY = 'rollcall_theme_v1';
+    const themeToggle = document.getElementById('themeToggle');
+    function applyTheme(theme){
+      if(theme === 'light') document.documentElement.classList.add('light-theme');
+      else document.documentElement.classList.remove('light-theme');
+      if(themeToggle) themeToggle.textContent = (theme === 'light') ? '☀️' : '🌙';
+    }
+    function initTheme(){
+      try{
+        const saved = localStorage.getItem(THEME_KEY);
+        if(saved){ applyTheme(saved); return; }
+        // 若无保存，使用系统偏好
+        const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        applyTheme(prefersLight ? 'light' : 'dark');
+      }catch(e){ console.warn('theme init error', e); }
+    }
+    function toggleTheme(){
+      try{
+        const isLight = document.documentElement.classList.contains('light-theme');
+        const next = isLight ? 'dark' : 'light';
+        applyTheme(next);
+        localStorage.setItem(THEME_KEY, next);
+      }catch(e){ console.warn(e); }
+    }
+    if(themeToggle) themeToggle.addEventListener('click', toggleTheme);
+
+    // 初始化主题（在页面其它逻辑前）
+    initTheme();
+
     // 简单的单页点名器逻辑（无依赖，适合 GitHub Pages）
     const namesInput = document.getElementById('namesInput');
     const loadNamesBtn = document.getElementById('loadNames');
@@ -138,7 +175,8 @@
         calledNames = rawCalled ? JSON.parse(rawCalled) : [];
         renderCalledList();
         updateCounts();
-        namesInput.value = allNames.join('\n');
+        namesInput.value = allNames.join('
+');
       }catch(e){
         console.error('storage load error', e);
       }
@@ -153,7 +191,8 @@
       const raw = namesInput.value.trim();
       if(!raw) return [];
       // 支持换行、逗号、分号分隔
-      const items = raw.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
+      const items = raw.split(/[
+,;，；]+/).map(s=>s.trim()).filter(Boolean);
       return Array.from(new Set(items)); // 去重
     }
 
@@ -172,7 +211,8 @@
         const right = document.createElement('div');
         right.style.display='flex';right.style.gap='8px';
         const rm = document.createElement('button'); rm.textContent='移除'; rm.className='small ghost';
-        rm.onclick = ()=>{ calledNames.splice(idx,1); allNames.push(name); saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n'); }
+        rm.onclick = ()=>{ calledNames.splice(idx,1); allNames.push(name); saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('
+'); }
         right.appendChild(rm);
         div.appendChild(left);
         div.appendChild(right);
@@ -194,7 +234,8 @@
         [allNames[i], allNames[j]] = [allNames[j], allNames[i]];
       }
       nameDisplay.textContent = '名单已打乱';
-      namesInput.value = allNames.join('\n');
+      namesInput.value = allNames.join('
+');
       saveToStorage();
     }
 
@@ -259,24 +300,28 @@
       const candidate = sel || nameDisplay.textContent;
       if(!candidate) return alert('未检测到姓名可标记');
       // 支持多行
-      const items = candidate.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
+      const items = candidate.split(/[
+,;，；]+/).map(s=>s.trim()).filter(Boolean);
       items.forEach(it=>{
         const idx = allNames.indexOf(it);
         if(idx!==-1) allNames.splice(idx,1);
         if(!calledNames.includes(it)) calledNames.unshift(it);
       });
-      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
+      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('
+');
     }
 
     copyCalled.onclick = async ()=>{
       try{
-        await navigator.clipboard.writeText(calledNames.join('\n'));
+        await navigator.clipboard.writeText(calledNames.join('
+'));
         alert('已复制到剪贴板');
       }catch(e){ alert('复制失败，请手动选择并复制。'); }
     }
 
     exportCalled.onclick = ()=>{
-      const blob = new Blob([calledNames.join('\n')], {type:'text/plain;charset=utf-8'});
+      const blob = new Blob([calledNames.join('
+')], {type:'text/plain;charset=utf-8'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = 'called_names.txt';
@@ -288,7 +333,8 @@
       // 把已点名单放回待点名单尾部
       allNames = allNames.concat(calledNames);
       calledNames = [];
-      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
+      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('
+');
     }
 
     // 页面离开时自动保存当前 textarea
