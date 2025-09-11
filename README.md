@@ -2,6 +2,9 @@
 
 一个简单易用的网页点名工具，支持名单管理、随机抽取、已点名单保存与导出，适合教师、活动主持人等场景。可直接部署到 GitHub Pages，无需后端。
 
+<img width="2092" height="1347" alt="image" src="https://github.com/user-attachments/assets/800852a8-c058-43a9-979f-0dad86e630dd" />
+
+
 ## 功能简介
 
 - 名单输入：支持粘贴、编辑、导入，每行一个姓名，自动去重。
