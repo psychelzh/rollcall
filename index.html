@@ -69,7 +69,7 @@
 
         <div class="card" style="margin-top:14px">
           <div class="viewer">
-            <div id="nameDisplay" class="name-display muted">点击“开始滚动”开始</div>
+            <div id="nameDisplay" class="name-display muted">点击"开始滚动"开始</div>
             <div class="meta">
               <div>当前模式：<span id="modeLabel">顺序 / 随机</span></div>
             </div>
@@ -249,20 +249,32 @@
     }
 
     // 更新UI状态函数
-    function updateUIState() {
-      if (allNames.length === 0) {
-        if (calledNames.length === 0) {
-          nameDisplay.textContent = '名单为空，请导入名单';
+    function updateUIState(updateDisplay = true) {
+      const hasNames = allNames.length > 0;
+      
+      if (updateDisplay) {
+        if (allNames.length === 0) {
+          if (calledNames.length === 0) {
+            nameDisplay.textContent = '名单为空，请导入名单';
+          } else {
+            nameDisplay.textContent = '所有学生已点名完毕';
+          }
         } else {
-          nameDisplay.textContent = '所有学生已点名完毕';
+          nameDisplay.textContent = '点击"开始滚动"开始点名';
         }
-        toggleRollBtn.disabled = true;
-        toggleRollBtn.classList.add('ghost');
-      } else {
-        nameDisplay.textContent = '点击"开始滚动"开始点名';
-        toggleRollBtn.disabled = false;
-        toggleRollBtn.classList.remove('ghost');
       }
+      
+      // 更新按钮状态
+      toggleRollBtn.disabled = !hasNames;
+      toggleRollBtn.classList.toggle('ghost', !hasNames);
+      
+      // 更新"打乱顺序"、"清空名单"和"加载名单"按钮状态
+      shuffleBtn.disabled = !hasNames;
+      clearAllBtn.disabled = !hasNames;
+      loadNamesBtn.disabled = !hasNames;
+      shuffleBtn.classList.toggle('ghost', !hasNames);
+      clearAllBtn.classList.toggle('ghost', !hasNames);
+      loadNamesBtn.classList.toggle('ghost', !hasNames);
     }
 
     function renderCalledList(){
@@ -289,6 +301,11 @@
       saveToStorage();
       updateCounts();
       nameDisplay.textContent = '名单已加载';
+      
+      // 对文本框内容去重
+      const uniqueLines = [...new Set(parsed)];
+      namesInput.value = uniqueLines.join('\n');
+      
       updateUIState(); // 添加UI状态更新
     }
 
@@ -342,7 +359,7 @@
         if(intervalId) clearInterval(intervalId);
         // 选中当前显示的名字
         const chosen = lastShown || nameDisplay.textContent;
-        if(!chosen || chosen==='点击“开始滚动”开始' || chosen==='名单已加载' || chosen==='无候选'){
+        if(!chosen || chosen==='点击"开始滚动"开始' || chosen==='名单已加载' || chosen==='无候选'){
           nameDisplay.textContent = '未能选中有效姓名';
           return;
         }
@@ -353,6 +370,14 @@
         saveToStorage();
         renderCalledList();
         updateCounts();
+        nameDisplay.textContent = chosen; // 显示选中的名字
+        
+        // 从文本框显示中移除选中的名字
+        const currentText = namesInput.value;
+        const lines = currentText.split('\n').filter(line => line.trim() !== chosen);
+        namesInput.value = lines.join('\n');
+        
+        updateUIState(false); // 更新按钮状态但不覆盖显示内容
       }
     }
 
@@ -390,11 +415,11 @@
     namesInput.addEventListener('click', updateMarkBtnState);
     namesInput.addEventListener('keyup', updateMarkBtnState);
     
-    // 监听输入框内容变化，手动清空时同步更新数据状态和UI状态
+    // 监听输入框内容变化，只在文本框完全清空且不是滚动点名过程中更新数据
     namesInput.addEventListener('input', () => {
       const parsed = parseInput();
-      if (parsed.length === 0) {
-        // 手动清空文本框时，同时清空待点名单
+      if (parsed.length === 0 && !rolling) {
+        // 手动清空文本框且不在滚动过程中时，清空待点名单
         allNames = [];
         saveToStorage();
         updateCounts();
