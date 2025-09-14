@@ -332,7 +332,46 @@
       updateCounts();
     }
 
+    // 动态更新“手动标记”按钮状态
+    function updateMarkBtnState() {
+      const textarea = namesInput;
+      const startPos = textarea.selectionStart;
+      const endPos = textarea.selectionEnd;
+      let hasSelection = false;
+
+      if (startPos !== endPos) {
+        hasSelection = true;
+      } else {
+        const text = textarea.value;
+        const lines = text.split('\n');
+        let lineStart = 0;
+        let lineEnd = 0;
+
+        for (const line of lines) {
+          lineEnd = lineStart + line.length + 1;
+          if (startPos >= lineStart && startPos < lineEnd) {
+            hasSelection = line.trim().length > 0;
+            break;
+          }
+          lineStart = lineEnd;
+        }
+      }
+
+      markBtn.disabled = !hasSelection;
+      markBtn.classList.toggle('ghost', !hasSelection);
+    }
+
+    // 监听输入框的选中和光标变化
+    namesInput.addEventListener('select', updateMarkBtnState);
+    namesInput.addEventListener('click', updateMarkBtnState);
+    namesInput.addEventListener('keyup', updateMarkBtnState);
+
+    // 初始化按钮状态
+    updateMarkBtnState();
+
     markBtn.onclick = ()=>{
+      if (markBtn.disabled) return;
+
       // 获取当前输入框中光标所在行的文本
       const textarea = namesInput;
       const startPos = textarea.selectionStart;
@@ -371,6 +410,10 @@
         if(!calledNames.includes(it)) calledNames.unshift(it);
       });
       saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
+
+      // 标记完成后禁用按钮，直到下一次选中
+      markBtn.disabled = true;
+      markBtn.classList.add('ghost');
     }
 
     copyCalled.onclick = async ()=>{
