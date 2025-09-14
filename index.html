@@ -224,6 +224,7 @@
         renderCalledList();
         updateCounts();
         namesInput.value = allNames.join('\n');
+        updateUIState(); // 添加UI状态更新
       }catch(e){
         console.error('storage load error', e);
       }
@@ -245,6 +246,23 @@
     function updateCounts(){
       totalCount.textContent = '总数: ' + (allNames.length + calledNames.length);
       remainingCount.textContent = '剩余: ' + (allNames.length);
+    }
+
+    // 更新UI状态函数
+    function updateUIState() {
+      if (allNames.length === 0) {
+        if (calledNames.length === 0) {
+          nameDisplay.textContent = '名单为空，请导入名单';
+        } else {
+          nameDisplay.textContent = '所有学生已点名完毕';
+        }
+        toggleRollBtn.disabled = true;
+        toggleRollBtn.classList.add('ghost');
+      } else {
+        nameDisplay.textContent = '点击"开始滚动"开始点名';
+        toggleRollBtn.disabled = false;
+        toggleRollBtn.classList.remove('ghost');
+      }
     }
 
     function renderCalledList(){
@@ -271,6 +289,7 @@
       saveToStorage();
       updateCounts();
       nameDisplay.textContent = '名单已加载';
+      updateUIState(); // 添加UI状态更新
     }
 
     shuffleBtn.onclick = ()=>{
@@ -284,12 +303,15 @@
     }
 
     clearAllBtn.onclick = ()=>{
-      if(!confirm('确认清空全部待点名单吗？此操作不会删除已点名单。')) return;
+      if(!confirm('确认清空全部名单吗？此操作将同时清空待点名单和已点名单。')) return;
       allNames = [];
+      calledNames = [];
       namesInput.value = '';
       updateCounts();
       saveToStorage();
+      renderCalledList();
       nameDisplay.textContent = '已清空';
+      updateUIState(); // 添加UI状态更新
     }
 
     toggleRollBtn.onclick = ()=>{
@@ -367,6 +389,18 @@
     namesInput.addEventListener('select', updateMarkBtnState);
     namesInput.addEventListener('click', updateMarkBtnState);
     namesInput.addEventListener('keyup', updateMarkBtnState);
+    
+    // 监听输入框内容变化，手动清空时同步更新数据状态和UI状态
+    namesInput.addEventListener('input', () => {
+      const parsed = parseInput();
+      if (parsed.length === 0) {
+        // 手动清空文本框时，同时清空待点名单
+        allNames = [];
+        saveToStorage();
+        updateCounts();
+        updateUIState();
+      }
+    });
 
     // 初始化按钮状态
     updateMarkBtnState();
@@ -435,10 +469,13 @@
 
     clearCalled.onclick = ()=>{
       if(!confirm('确认清除已点名单？此操作不可恢复。')) return;
-      // 把已点名单放回待点名单尾部
       allNames = allNames.concat(calledNames);
       calledNames = [];
-      saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
+      saveToStorage(); 
+      renderCalledList(); 
+      updateCounts(); 
+      namesInput.value = allNames.join('\n');
+      updateUIState(); // 添加UI状态更新
     }
 
     // 页面离开时自动保存当前 textarea
