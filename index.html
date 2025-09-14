@@ -73,8 +73,7 @@
               <div>当前模式：<span id="modeLabel">顺序 / 随机</span></div>
             </div>
             <div style="margin-top:16px;display:flex;gap:10px">
-              <button id="startBtn" class="big">开始滚动</button>
-              <button id="stopBtn" class="big ghost" disabled>停止</button>
+              <button id="toggleRollBtn" class="big">开始滚动</button>
               <button id="markBtn" class="big ghost">手动标记</button>
             </div>
           </div>
@@ -188,8 +187,7 @@
     const totalCount = document.getElementById('totalCount');
     const remainingCount = document.getElementById('remainingCount');
     const nameDisplay = document.getElementById('nameDisplay');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
+    const toggleRollBtn = document.getElementById('toggleRollBtn');
     const markBtn = document.getElementById('markBtn');
     const calledListEl = document.getElementById('calledList');
     const copyCalled = document.getElementById('copyCalled');
@@ -286,50 +284,46 @@
       nameDisplay.textContent = '已清空';
     }
 
-    startBtn.onclick = ()=>{
-      if(rolling) return;
-      // 若当前输入框未加载到存量，则尝试加载
-      if(allNames.length === 0){
-        const parsed = parseInput();
-        if(parsed.length===0){ alert('名单为空，请先粘贴或加载名单。'); return; }
-        allNames = parsed.filter(n => !calledNames.includes(n));
+    toggleRollBtn.onclick = ()=>{
+      if(!rolling){
+        // 若当前输入框未加载到存量，则尝试加载
+        if(allNames.length === 0){
+          const parsed = parseInput();
+          if(parsed.length===0){ alert('名单为空，请先粘贴或加载名单。'); return; }
+          allNames = parsed.filter(n => !calledNames.includes(n));
+          saveToStorage();
+        }
+        rolling = true;
+        toggleRollBtn.textContent = '停止';
+        nameDisplay.classList.add('blur');
+        modeRandom = true; // 进入滚动时默认随机
+        modeLabel.textContent = '随机';
+        intervalId = setInterval(()=>{
+          if(allNames.length===0){ nameDisplay.textContent = '无候选'; return; }
+          // 随机取一个但不立即移除，选择时在 stop 时处理
+          const pick = allNames[Math.floor(Math.random()*allNames.length)];
+          lastShown = pick;
+          nameDisplay.textContent = pick;
+        }, 60);
+      } else {
+        rolling = false;
+        toggleRollBtn.textContent = '开始滚动';
+        nameDisplay.classList.remove('blur');
+        if(intervalId) clearInterval(intervalId);
+        // 选中当前显示的名字
+        const chosen = lastShown || nameDisplay.textContent;
+        if(!chosen || chosen==='点击“开始滚动”开始' || chosen==='名单已加载' || chosen==='无候选'){
+          nameDisplay.textContent = '未能选中有效姓名';
+          return;
+        }
+        // 将选中者从 allNames 移到 calledNames
+        const idx = allNames.indexOf(chosen);
+        if(idx!==-1) allNames.splice(idx,1);
+        if(!calledNames.includes(chosen)) calledNames.unshift(chosen);
         saveToStorage();
+        renderCalledList();
+        updateCounts();
       }
-      rolling = true;
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-      nameDisplay.classList.add('blur');
-      modeRandom = true; // 进入滚动时默认随机
-      modeLabel.textContent = '随机';
-      intervalId = setInterval(()=>{
-        if(allNames.length===0){ nameDisplay.textContent = '无候选'; return; }
-        // 随机取一个但不立即移除，选择时在 stop 时处理
-        const pick = allNames[Math.floor(Math.random()*allNames.length)];
-        lastShown = pick;
-        nameDisplay.textContent = pick;
-      }, 60);
-    }
-
-    stopBtn.onclick = ()=>{
-      if(!rolling) return;
-      rolling = false;
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      nameDisplay.classList.remove('blur');
-      if(intervalId) clearInterval(intervalId);
-      // 选中当前显示的名字
-      const chosen = lastShown || nameDisplay.textContent;
-      if(!chosen || chosen==='点击“开始滚动”开始' || chosen==='名单已加载' || chosen==='无候选'){
-        nameDisplay.textContent = '未能选中有效姓名';
-        return;
-      }
-      // 将选中者从 allNames 移到 calledNames
-      const idx = allNames.indexOf(chosen);
-      if(idx!==-1) allNames.splice(idx,1);
-      if(!calledNames.includes(chosen)) calledNames.unshift(chosen);
-      saveToStorage();
-      renderCalledList();
-      updateCounts();
     }
 
     // 动态更新“手动标记”按钮状态
