@@ -275,6 +275,15 @@
       shuffleBtn.classList.toggle('ghost', !hasNames);
       clearAllBtn.classList.toggle('ghost', !hasNames);
       loadNamesBtn.classList.toggle('ghost', !hasNames);
+      
+      // 更新已点名单相关按钮状态（复制、导出、清空）
+      const hasCalledNames = calledNames.length > 0;
+      copyCalled.disabled = !hasCalledNames;
+      exportCalled.disabled = !hasCalledNames;
+      clearCalled.disabled = !hasCalledNames;
+      copyCalled.classList.toggle('ghost', !hasCalledNames);
+      exportCalled.classList.toggle('ghost', !hasCalledNames);
+      clearCalled.classList.toggle('ghost', !hasCalledNames);
     }
 
     function renderCalledList(){
@@ -381,7 +390,7 @@
       }
     }
 
-    // 动态更新“手动标记”按钮状态
+    // 动态更新"手动标记"按钮状态
     function updateMarkBtnState() {
       const textarea = namesInput;
       const startPos = textarea.selectionStart;
@@ -560,9 +569,13 @@
               const csvText = await csvResponse.text();
               const names = csvText.split('\n').map(line => line.trim()).filter(Boolean);
               namesInput.value = names.join('\n');
+              allNames = names.filter(n => !calledNames.includes(n));
+              saveToStorage();
+              updateCounts();
               updateNamesInputTitle(file.name);
               githubModal.style.display = 'none';
               nameDisplay.textContent = 'CSV 文件已加载';
+              updateUIState(); // 更新按钮状态
             } catch (error) {
               console.error('Error loading CSV:', error);
               alert('加载 CSV 文件失败');
