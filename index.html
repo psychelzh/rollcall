@@ -562,7 +562,9 @@
               const csvText = await csvResponse.text();
               const names = csvText.split('\n').map(line => line.trim()).filter(Boolean);
               namesInput.value = names.join('\n');
-              allNames = names.filter(n => !calledNames.includes(n));
+              calledNames = []; // 清空已点名单
+              allNames = names;
+              renderCalledList(); // 更新已点名单显示
               saveToStorage();
               updateCounts();
               updateNamesInputTitle(file.name);
