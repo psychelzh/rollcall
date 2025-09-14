@@ -333,12 +333,38 @@
     }
 
     markBtn.onclick = ()=>{
-      // 手动将当前输入框中的所选文本作为已点（若光标选中有文本，则用选中文本，否则用展示区当前文本）
-      const sel = window.getSelection().toString().trim();
-      const candidate = sel || nameDisplay.textContent;
-      if(!candidate) return alert('未检测到姓名可标记');
+      // 获取当前输入框中光标所在行的文本
+      const textarea = namesInput;
+      const startPos = textarea.selectionStart;
+      const endPos = textarea.selectionEnd;
+
+      // 如果选中了文本，则使用选中文本；否则获取光标所在行的文本
+      let selectedText = '';
+      if (startPos !== endPos) {
+        selectedText = textarea.value.substring(startPos, endPos).trim();
+      } else {
+        // 获取光标所在行的文本
+        const text = textarea.value;
+        const lines = text.split('\n');
+        let lineStart = 0;
+        let lineEnd = 0;
+        let currentLine = '';
+
+        for (const line of lines) {
+          lineEnd = lineStart + line.length + 1; // +1 for the newline character
+          if (startPos >= lineStart && startPos < lineEnd) {
+            currentLine = line.trim();
+            break;
+          }
+          lineStart = lineEnd;
+        }
+        selectedText = currentLine;
+      }
+
+      if (!selectedText) return alert('未检测到姓名可标记');
+
       // 支持多行
-      const items = candidate.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
+      const items = selectedText.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
       items.forEach(it=>{
         const idx = allNames.indexOf(it);
         if(idx!==-1) allNames.splice(idx,1);
