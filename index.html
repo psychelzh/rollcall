@@ -50,7 +50,7 @@
       <div class="col">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <strong>名单输入（每行一个姓名）</strong>
+            <strong id="namesInputTitle" title="名单输入（每行一个姓名）">名单输入（每行一个姓名）</strong>
             <div class="muted">可粘贴 / 编辑 / 导入</div>
           </div>
           <textarea id="namesInput" placeholder="示例：\n张三\n李四\n王五"></textarea>
@@ -180,6 +180,12 @@
     initTheme();
 
     // 简单的单页点名器逻辑（无依赖，适合 GitHub Pages）
+    function updateNamesInputTitle(filename) {
+      const nameWithoutExt = filename.replace(/\.csv$/, '');
+      const truncated = nameWithoutExt.length > 15 ? nameWithoutExt.substring(0, 15) + '...' : nameWithoutExt;
+      namesInputTitle.textContent = truncated;
+      namesInputTitle.title = nameWithoutExt;
+    }
     const namesInput = document.getElementById('namesInput');
     const loadNamesBtn = document.getElementById('loadNames');
     const shuffleBtn = document.getElementById('shuffle');
@@ -194,6 +200,7 @@
     const exportCalled = document.getElementById('exportCalled');
     const clearCalled = document.getElementById('clearCalled');
     const modeLabel = document.getElementById('modeLabel');
+    const namesInputTitle = document.getElementById('namesInputTitle');
 
     // Storage keys
     const STORAGE_ALL = 'rollcall_all_names_v1';
@@ -490,6 +497,7 @@
               const csvText = await csvResponse.text();
               const names = csvText.split('\n').map(line => line.trim()).filter(Boolean);
               namesInput.value = names.join('\n');
+              updateNamesInputTitle(file.name);
               githubModal.style.display = 'none';
               nameDisplay.textContent = 'CSV 文件已加载';
             } catch (error) {
