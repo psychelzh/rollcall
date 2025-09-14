@@ -270,10 +270,23 @@
       toggleRollBtn.classList.toggle('ghost', !hasNames);
 
       // 更新"打乱顺序"和"清空名单"按钮状态
+      // 清空名单按钮应该在完全没有名单时禁用（既没有待点名单也没有已点名单）
+      const hasAnyNames = hasNames || calledNames.length > 0;
       shuffleBtn.disabled = !hasNames;
-      clearAllBtn.disabled = !hasNames;
+      clearAllBtn.disabled = !hasAnyNames;
+      
+      // 统一按钮样式处理：禁用时使用ghost样式
       shuffleBtn.classList.toggle('ghost', !hasNames);
-      clearAllBtn.classList.toggle('ghost', !hasNames);
+      clearAllBtn.classList.toggle('ghost', !hasAnyNames);
+      
+      // 清空名单按钮启用时使用危险红色样式
+      if (!clearAllBtn.disabled) {
+        clearAllBtn.style.background = '#dc2626';
+        clearAllBtn.style.color = 'white';
+      } else {
+        clearAllBtn.style.background = '';
+        clearAllBtn.style.color = '';
+      }
 
       // 更新已点名单相关按钮状态（复制、导出、清空）
       const hasCalledNames = calledNames.length > 0;
@@ -314,7 +327,7 @@
     }
 
     clearAllBtn.onclick = ()=>{
-      if(!confirm('确认清空全部名单吗？此操作将同时清空待点名单和已点名单。')) return;
+      if(!confirm('确认清空全部名单吗？此操作将清空所有名单，包括待点名单和已点名单。')) return;
       allNames = [];
       calledNames = [];
       namesInput.value = '';
