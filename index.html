@@ -299,22 +299,40 @@
     }
 
     function renderCalledList(){
-      calledListEl.innerHTML = '';
+      const fragment = document.createDocumentFragment();
       calledNames.forEach((name, idx)=>{
         const div = document.createElement('div');
         div.className = 'called-item';
+        div.dataset.idx = idx;
         const left = document.createElement('div');
         left.textContent = name;
         const right = document.createElement('div');
         right.style.display='flex';right.style.gap='8px';
         const rm = document.createElement('button'); rm.textContent='移除'; rm.className='small ghost';
-        rm.onclick = ()=>{ calledNames.splice(idx,1); allNames.push(name); saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n'); }
+        rm.dataset.action = 'remove';
         right.appendChild(rm);
         div.appendChild(left);
         div.appendChild(right);
-        calledListEl.appendChild(div);
+        fragment.appendChild(div);
       });
+      calledListEl.innerHTML = '';
+      calledListEl.appendChild(fragment);
     }
+
+    // 事件委托：处理已点名单中的按钮点击
+    calledListEl.addEventListener('click', (e)=>{
+      const button = e.target.closest('button[data-action="remove"]');
+      if(!button) return;
+      const item = button.closest('.called-item');
+      const idx = parseInt(item.dataset.idx);
+      const name = calledNames[idx];
+      calledNames.splice(idx,1);
+      allNames.push(name);
+      saveToStorage();
+      renderCalledList();
+      updateCounts();
+      namesInput.value = allNames.join('\n');
+    });
 
     shuffleBtn.onclick = ()=>{
       for(let i=allNames.length-1;i>0;i--){
@@ -352,13 +370,35 @@
         nameDisplay.classList.add('blur');
         modeRandom = true; // 进入滚动时默认随机
         modeLabel.textContent = '随机';
-        intervalId = setInterval(()=>{
-          if(allNames.length===0){ nameDisplay.textContent = '无候选'; return; }
-          // 随机取一个但不立即移除，选择时在 stop 时处理
-          const pick = allNames[Math.floor(Math.random()*allNames.length)];
-          lastShown = pick;
-          nameDisplay.textContent = pick;
-        }, 60);
+        // 节流函数
+    function throttle(func, limit) {
+      let lastFunc;
+      let lastRan;
+      return function() {
+        const context = this;
+        const args = arguments;
+        if (!lastRan) {
+          func.apply(context, args);
+          lastRan = Date.now();
+        } else {
+          clearTimeout(lastFunc);
+          lastFunc = setTimeout(function() {
+            if ((Date.now() - lastRan) >= limit) {
+              func.apply(context, args);
+              lastRan = Date.now();
+            }
+          }, limit - (Date.now() - lastRan));
+        }
+      };
+    }
+
+    intervalId = setInterval(throttle(()=>{
+      if(allNames.length===0){ nameDisplay.textContent = '无候选'; return; }
+      // 随机取一个但不立即移除，选择时在 stop 时处理
+      const pick = allNames[Math.floor(Math.random()*allNames.length)];
+      lastShown = pick;
+      nameDisplay.textContent = pick;
+    }, 100), 60);
       } else {
         rolling = false;
         toggleRollBtn.textContent = '开始滚动';
