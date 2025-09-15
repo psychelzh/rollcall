@@ -171,6 +171,24 @@ function updateUIState(updateDisplay = true) {
   exportCalled.classList.toggle('ghost', !hasCalledNames);
   clearCalled.classList.toggle('ghost', !hasCalledNames);
   createPRBtn.classList.toggle('ghost', !hasCalledNames);
+
+  // 设置创建PR按钮激活状态颜色
+  if (!createPRBtn.disabled) {
+    createPRBtn.style.background = '#059669';
+    createPRBtn.style.color = 'white';
+  } else {
+    createPRBtn.style.background = '';
+    createPRBtn.style.color = '';
+  }
+
+  // 设置清除按钮激活状态颜色（危险颜色）
+  if (!clearCalled.disabled) {
+    clearCalled.style.background = '#dc2626';
+    clearCalled.style.color = 'white';
+  } else {
+    clearCalled.style.background = '';
+    clearCalled.style.color = '';
+  }
 }
 
 function renderCalledList() {
