@@ -1,49 +1,239 @@
 <!doctype html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>点名器（GitHub Pages 可部署）</title>
   <style>
-    :root{--bg:#0f1724;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;--glass: rgba(255,255,255,0.03);--text:#e6eef8}
-    /* 白天主题覆盖 */
-    .light-theme{ --bg: #f6fafc; --card: #ffffff; --accent: #2563eb; --muted: #4b5563; --glass: rgba(2,6,23,0.03); --text: #0b1220 }
+    :root {
+      --bg: #0f1724;
+      --card: #0b1220;
+      --accent: #60a5fa;
+      --muted: #94a3b8;
+      --glass: rgba(255, 255, 255, 0.03);
+      --text: #e6eef8
+    }
 
-    html,body{height:100%;margin:0;padding:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,'Noto Sans SC',"Helvetica Neue","PingFang SC",Arial; background: linear-gradient(180deg,var(--bg) 0%, rgba(0,0,0,0) 100%);color:var(--text);transition:background-color 240ms linear,color 240ms linear;overflow:hidden}
-    .app{max-width:980px;margin:28px auto;padding:20px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 6px 30px rgba(2,6,23,0.7)}
-    header{display:flex;align-items:center;justify-content:space-between}
-    h1{margin:0;font-size:18px}
-    .row{display:flex;gap:18px;margin-top:16px}
-    .col{flex:1;min-width:0}
-    .card{background:var(--card);padding:14px;border-radius:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
-    textarea{height:160px;width:100%;resize:vertical;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);color:inherit;box-sizing:border-box;overflow-y:auto}
-    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-    button{border:0;padding:9px 12px;border-radius:8px;background:var(--accent);color:var(--card);font-weight:600;cursor:pointer}
-    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted);font-weight:500}
-    .big{padding:14px 18px;font-size:16px}
-    .viewer{display:flex;flex-direction:column;align-items:center;justify-content:center;height:220px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));}
-    .name-display{font-size:36px;font-weight:700;transition:filter 160ms linear, transform 160ms linear, opacity 160ms linear}
-    .blur{filter: blur(6px) saturate(1.05) contrast(1.02);transform:scale(1.02);opacity:0.9}
-    .meta{display:flex;gap:10px;align-items:center;margin-top:12px;color:var(--muted);font-size:13px}
-    .called-list{max-height:360px;overflow:auto;padding:8px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent)}
-    .called-item{display:flex;justify-content:space-between;padding:8px;border-radius:6px;margin-bottom:6px;background:rgba(0,0,0,0.06)}
-    .muted{color:var(--muted)}
-    .small{font-size:13px;padding:6px 8px}
-    .flex-between{display:flex;justify-content:space-between;align-items:center}
-    .kbd{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;font-family:monospace;font-size:13px}
-    footer{margin-top:12px;color:var(--muted);font-size:13px}
-    .theme-toggle{background:transparent;border:0;font-size:18px;cursor:pointer;padding:6px;border-radius:8px}
-    @media (max-width:760px){.row{flex-direction:column}.viewer{height:180px}.name-display{font-size:26px}}
+    /* 白天主题覆盖 */
+    .light-theme {
+      --bg: #f6fafc;
+      --card: #ffffff;
+      --accent: #2563eb;
+      --muted: #4b5563;
+      --glass: rgba(2, 6, 23, 0.03);
+      --text: #0b1220
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, 'Noto Sans SC', "Helvetica Neue", "PingFang SC", Arial;
+      background: linear-gradient(180deg, var(--bg) 0%, rgba(0, 0, 0, 0) 100%);
+      color: var(--text);
+      transition: background-color 240ms linear, color 240ms linear;
+      overflow: hidden
+    }
+
+    .app {
+      max-width: 980px;
+      margin: 28px auto;
+      padding: 20px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+      box-shadow: 0 6px 30px rgba(2, 6, 23, 0.7)
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px
+    }
+
+    .row {
+      display: flex;
+      gap: 18px;
+      margin-top: 16px
+    }
+
+    .col {
+      flex: 1;
+      min-width: 0
+    }
+
+    .card {
+      background: var(--card);
+      padding: 14px;
+      border-radius: 10px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02)
+    }
+
+    textarea {
+      height: 160px;
+      width: 100%;
+      resize: vertical;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      background: rgba(255, 255, 255, 0.02);
+      color: inherit;
+      box-sizing: border-box;
+      overflow-y: auto
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px
+    }
+
+    button {
+      border: 0;
+      padding: 9px 12px;
+      border-radius: 8px;
+      background: var(--accent);
+      color: var(--card);
+      font-weight: 600;
+      cursor: pointer
+    }
+
+    button.ghost {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+      font-weight: 500
+    }
+
+    .big {
+      padding: 14px 18px;
+      font-size: 16px
+    }
+
+    .viewer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 220px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0.00));
+    }
+
+    .name-display {
+      font-size: 36px;
+      font-weight: 700;
+      transition: filter 160ms linear, transform 160ms linear, opacity 160ms linear
+    }
+
+    .blur {
+      filter: blur(6px) saturate(1.05) contrast(1.02);
+      transform: scale(1.02);
+      opacity: 0.9
+    }
+
+    .meta {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px
+    }
+
+    .called-list {
+      max-height: 360px;
+      overflow: auto;
+      padding: 8px;
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent)
+    }
+
+    .called-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: rgba(0, 0, 0, 0.06)
+    }
+
+    .muted {
+      color: var(--muted)
+    }
+
+    .small {
+      font-size: 13px;
+      padding: 6px 8px
+    }
+
+    .flex-between {
+      display: flex;
+      justify-content: space-between;
+      align-items: center
+    }
+
+    .kbd {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 13px
+    }
+
+    footer {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px
+    }
+
+    .theme-toggle {
+      background: transparent;
+      border: 0;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 8px
+    }
+
+    @media (max-width:760px) {
+      .row {
+        flex-direction: column
+      }
+
+      .viewer {
+        height: 180px
+      }
+
+      .name-display {
+        font-size: 26px
+      }
+    }
   </style>
 </head>
+
 <body>
   <div class="app">
     <header>
 
       <h1>点名器</h1>
       <div style="display:flex;align-items:center;gap:10px">
-        <a href="https://github.com/psychelzh/rollcall" target="_blank" style="color: var(--text); text-decoration: none; display: flex; align-items: center;"><svg height="20" viewBox="0 0 16 16" width="20" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg></a>
-        <button id="themeToggle" class="theme-toggle" title="切换白天/夜间主题" aria-label="切换主题" style="display: flex; align-items: center; justify-content: center; height: 20px; padding: 0 6px;">🌙</button>
+        <a href="https://github.com/psychelzh/rollcall" target="_blank"
+          style="color: var(--text); text-decoration: none; display: flex; align-items: center;"><svg height="20"
+            viewBox="0 0 16 16" width="20" fill="currentColor">
+            <path
+              d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+            </path>
+          </svg></a>
+        <button id="themeToggle" class="theme-toggle" title="切换白天/夜间主题" aria-label="切换主题"
+          style="display: flex; align-items: center; justify-content: center; height: 20px; padding: 0 6px;">🌙</button>
       </div>
     </header>
 
@@ -51,7 +241,8 @@
       <div class="col">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <strong id="namesInputTitle" title="名单输入（每行一个姓名）" style="margin-bottom: 12px; display: block;">名单输入（每行一个姓名）</strong>
+            <strong id="namesInputTitle" title="名单输入（每行一个姓名）"
+              style="margin-bottom: 12px; display: block;">名单输入（每行一个姓名）</strong>
             <div class="muted">可粘贴 / 编辑 / 导入</div>
           </div>
           <textarea id="namesInput" placeholder="示例：
@@ -123,6 +314,7 @@
       justify-content: center;
       align-items: center;
     }
+
     .modal-content {
       background: var(--card);
       padding: 20px;
@@ -130,6 +322,7 @@
       width: 80%;
       max-width: 500px;
     }
+
     .modal-close {
       position: absolute;
       top: 10px;
@@ -145,8 +338,10 @@
     <div class="modal-content">
       <button class="modal-close" id="closeModal">×</button>
       <h3>从 GitHub 导入名单</h3>
-      <input type="text" id="githubRepo" placeholder="输入 GitHub 仓库地址（如：owner/repo）" style="width:100%;padding:8px;margin-bottom:10px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
-      <button id="fetchCSV" style="width:100%;padding:8px;background:var(--accent);color:var(--card);border:none;">获取 CSV 文件</button>
+      <input type="text" id="githubRepo" placeholder="输入 GitHub 仓库地址（如：owner/repo）"
+        style="width:100%;padding:8px;margin-bottom:10px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
+      <button id="fetchCSV" style="width:100%;padding:8px;background:var(--accent);color:var(--card);border:none;">获取
+        CSV 文件</button>
       <div id="csvFiles" style="margin-top:10px;"></div>
     </div>
   </div>
@@ -155,29 +350,29 @@
     // 主题切换：支持 白天 / 夜间，保存在 localStorage
     const THEME_KEY = 'rollcall_theme_v1';
     const themeToggle = document.getElementById('themeToggle');
-    function applyTheme(theme){
-      if(theme === 'light') document.documentElement.classList.add('light-theme');
+    function applyTheme(theme) {
+      if (theme === 'light') document.documentElement.classList.add('light-theme');
       else document.documentElement.classList.remove('light-theme');
-      if(themeToggle) themeToggle.textContent = (theme === 'light') ? '☀️' : '🌙';
+      if (themeToggle) themeToggle.textContent = (theme === 'light') ? '☀️' : '🌙';
     }
-    function initTheme(){
-      try{
+    function initTheme() {
+      try {
         const saved = localStorage.getItem(THEME_KEY);
-        if(saved){ applyTheme(saved); return; }
+        if (saved) { applyTheme(saved); return; }
         // 若无保存，使用系统偏好
         const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
         applyTheme(prefersLight ? 'light' : 'dark');
-      }catch(e){ console.warn('theme init error', e); }
+      } catch (e) { console.warn('theme init error', e); }
     }
-    function toggleTheme(){
-      try{
+    function toggleTheme() {
+      try {
         const isLight = document.documentElement.classList.contains('light-theme');
         const next = isLight ? 'dark' : 'light';
         applyTheme(next);
         localStorage.setItem(THEME_KEY, next);
-      }catch(e){ console.warn(e); }
+      } catch (e) { console.warn(e); }
     }
-    if(themeToggle) themeToggle.addEventListener('click', toggleTheme);
+    if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
 
     // 初始化主题（在页面其它逻辑前）
     initTheme();
@@ -216,8 +411,8 @@
     let modeRandom = true; // 默认随机
 
     // 初始化：从 localStorage 读取
-    function loadFromStorage(){
-      try{
+    function loadFromStorage() {
+      try {
         const rawAll = localStorage.getItem(STORAGE_ALL);
         const rawCalled = localStorage.getItem(STORAGE_CALLED);
         allNames = rawAll ? JSON.parse(rawAll) : [];
@@ -226,25 +421,25 @@
         updateCounts();
         namesInput.value = allNames.join('\n');
         updateUIState(); // 添加UI状态更新
-      }catch(e){
+      } catch (e) {
         console.error('storage load error', e);
       }
     }
 
-    function saveToStorage(){
+    function saveToStorage() {
       localStorage.setItem(STORAGE_ALL, JSON.stringify(allNames));
       localStorage.setItem(STORAGE_CALLED, JSON.stringify(calledNames));
     }
 
-    function parseInput(){
+    function parseInput() {
       const raw = namesInput.value.trim();
-      if(!raw) return [];
+      if (!raw) return [];
       // 支持换行、逗号、分号分隔
-      const items = raw.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
+      const items = raw.split(/[\n,;，；]+/).map(s => s.trim()).filter(Boolean);
       return Array.from(new Set(items)); // 去重
     }
 
-    function updateCounts(){
+    function updateCounts() {
       totalCount.textContent = '总数: ' + (allNames.length + calledNames.length);
       remainingCount.textContent = '剩余: ' + (allNames.length);
     }
@@ -274,11 +469,11 @@
       const hasAnyNames = hasNames || calledNames.length > 0;
       shuffleBtn.disabled = !hasNames;
       clearAllBtn.disabled = !hasAnyNames;
-      
+
       // 统一按钮样式处理：禁用时使用ghost样式
       shuffleBtn.classList.toggle('ghost', !hasNames);
       clearAllBtn.classList.toggle('ghost', !hasAnyNames);
-      
+
       // 清空名单按钮启用时使用危险红色样式
       if (!clearAllBtn.disabled) {
         clearAllBtn.style.background = '#dc2626';
@@ -298,17 +493,17 @@
       clearCalled.classList.toggle('ghost', !hasCalledNames);
     }
 
-    function renderCalledList(){
+    function renderCalledList() {
       const fragment = document.createDocumentFragment();
-      calledNames.forEach((name, idx)=>{
+      calledNames.forEach((name, idx) => {
         const div = document.createElement('div');
         div.className = 'called-item';
         div.dataset.idx = idx;
         const left = document.createElement('div');
         left.textContent = name;
         const right = document.createElement('div');
-        right.style.display='flex';right.style.gap='8px';
-        const rm = document.createElement('button'); rm.textContent='移除'; rm.className='small ghost';
+        right.style.display = 'flex'; right.style.gap = '8px';
+        const rm = document.createElement('button'); rm.textContent = '移除'; rm.className = 'small ghost';
         rm.dataset.action = 'remove';
         right.appendChild(rm);
         div.appendChild(left);
@@ -320,13 +515,13 @@
     }
 
     // 事件委托：处理已点名单中的按钮点击
-    calledListEl.addEventListener('click', (e)=>{
+    calledListEl.addEventListener('click', (e) => {
       const button = e.target.closest('button[data-action="remove"]');
-      if(!button) return;
+      if (!button) return;
       const item = button.closest('.called-item');
       const idx = parseInt(item.dataset.idx);
       const name = calledNames[idx];
-      calledNames.splice(idx,1);
+      calledNames.splice(idx, 1);
       allNames.push(name);
       saveToStorage();
       renderCalledList();
@@ -334,9 +529,9 @@
       namesInput.value = allNames.join('\n');
     });
 
-    shuffleBtn.onclick = ()=>{
-      for(let i=allNames.length-1;i>0;i--){
-        const j = Math.floor(Math.random()*(i+1));
+    shuffleBtn.onclick = () => {
+      for (let i = allNames.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
         [allNames[i], allNames[j]] = [allNames[j], allNames[i]];
       }
       nameDisplay.textContent = '名单已打乱';
@@ -344,8 +539,8 @@
       saveToStorage();
     }
 
-    clearAllBtn.onclick = ()=>{
-      if(!confirm('确认清空全部名单吗？此操作将清空所有名单，包括待点名单和已点名单。')) return;
+    clearAllBtn.onclick = () => {
+      if (!confirm('确认清空全部名单吗？此操作将清空所有名单，包括待点名单和已点名单。')) return;
       allNames = [];
       calledNames = [];
       namesInput.value = '';
@@ -356,12 +551,12 @@
       updateUIState(); // 添加UI状态更新
     }
 
-    toggleRollBtn.onclick = ()=>{
-      if(!rolling){
+    toggleRollBtn.onclick = () => {
+      if (!rolling) {
         // 若当前输入框未加载到存量，则尝试加载
-        if(allNames.length === 0){
+        if (allNames.length === 0) {
           const parsed = parseInput();
-          if(parsed.length===0){ alert('名单为空，请先粘贴或加载名单。'); return; }
+          if (parsed.length === 0) { alert('名单为空，请先粘贴或加载名单。'); return; }
           allNames = parsed.filter(n => !calledNames.includes(n));
           saveToStorage();
         }
@@ -371,49 +566,49 @@
         modeRandom = true; // 进入滚动时默认随机
         modeLabel.textContent = '随机';
         // 节流函数
-    function throttle(func, limit) {
-      let lastFunc;
-      let lastRan;
-      return function() {
-        const context = this;
-        const args = arguments;
-        if (!lastRan) {
-          func.apply(context, args);
-          lastRan = Date.now();
-        } else {
-          clearTimeout(lastFunc);
-          lastFunc = setTimeout(function() {
-            if ((Date.now() - lastRan) >= limit) {
+        function throttle(func, limit) {
+          let lastFunc;
+          let lastRan;
+          return function () {
+            const context = this;
+            const args = arguments;
+            if (!lastRan) {
               func.apply(context, args);
               lastRan = Date.now();
+            } else {
+              clearTimeout(lastFunc);
+              lastFunc = setTimeout(function () {
+                if ((Date.now() - lastRan) >= limit) {
+                  func.apply(context, args);
+                  lastRan = Date.now();
+                }
+              }, limit - (Date.now() - lastRan));
             }
-          }, limit - (Date.now() - lastRan));
+          };
         }
-      };
-    }
 
-    intervalId = setInterval(throttle(()=>{
-      if(allNames.length===0){ nameDisplay.textContent = '无候选'; return; }
-      // 随机取一个但不立即移除，选择时在 stop 时处理
-      const pick = allNames[Math.floor(Math.random()*allNames.length)];
-      lastShown = pick;
-      nameDisplay.textContent = pick;
-    }, 100), 60);
+        intervalId = setInterval(throttle(() => {
+          if (allNames.length === 0) { nameDisplay.textContent = '无候选'; return; }
+          // 随机取一个但不立即移除，选择时在 stop 时处理
+          const pick = allNames[Math.floor(Math.random() * allNames.length)];
+          lastShown = pick;
+          nameDisplay.textContent = pick;
+        }, 100), 60);
       } else {
         rolling = false;
         toggleRollBtn.textContent = '开始滚动';
         nameDisplay.classList.remove('blur');
-        if(intervalId) clearInterval(intervalId);
+        if (intervalId) clearInterval(intervalId);
         // 选中当前显示的名字
         const chosen = lastShown || nameDisplay.textContent;
-        if(!chosen || chosen==='点击"开始滚动"开始' || chosen==='名单已加载' || chosen==='无候选'){
+        if (!chosen || chosen === '点击"开始滚动"开始' || chosen === '名单已加载' || chosen === '无候选') {
           nameDisplay.textContent = '未能选中有效姓名';
           return;
         }
         // 将选中者从 allNames 移到 calledNames
         const idx = allNames.indexOf(chosen);
-        if(idx!==-1) allNames.splice(idx,1);
-        if(!calledNames.includes(chosen)) calledNames.unshift(chosen);
+        if (idx !== -1) allNames.splice(idx, 1);
+        if (!calledNames.includes(chosen)) calledNames.unshift(chosen);
         saveToStorage();
         renderCalledList();
         updateCounts();
@@ -479,13 +674,13 @@
         updateUIState();
       }
     });
-      // 每次输入后自动刷新相关按钮UI状态
-      namesInput.addEventListener('input', updateMarkBtnState);
+    // 每次输入后自动刷新相关按钮UI状态
+    namesInput.addEventListener('input', updateMarkBtnState);
 
     // 初始化按钮状态
     updateMarkBtnState();
 
-    markBtn.onclick = ()=>{
+    markBtn.onclick = () => {
       if (markBtn.disabled) return;
 
       // 获取当前输入框中光标所在行的文本
@@ -519,11 +714,11 @@
       if (!selectedText) return alert('未检测到姓名可标记');
 
       // 支持多行
-      const items = selectedText.split(/[\n,;，；]+/).map(s=>s.trim()).filter(Boolean);
-      items.forEach(it=>{
+      const items = selectedText.split(/[\n,;，；]+/).map(s => s.trim()).filter(Boolean);
+      items.forEach(it => {
         const idx = allNames.indexOf(it);
-        if(idx!==-1) allNames.splice(idx,1);
-        if(!calledNames.includes(it)) calledNames.unshift(it);
+        if (idx !== -1) allNames.splice(idx, 1);
+        if (!calledNames.includes(it)) calledNames.unshift(it);
       });
       saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
 
@@ -532,23 +727,23 @@
       markBtn.classList.add('ghost');
     }
 
-    copyCalled.onclick = async ()=>{
-      try{
+    copyCalled.onclick = async () => {
+      try {
         await navigator.clipboard.writeText(calledNames.join('\n'));
         alert('已复制到剪贴板');
-      }catch(e){ alert('复制失败，请手动选择并复制。'); }
+      } catch (e) { alert('复制失败，请手动选择并复制。'); }
     }
 
-    exportCalled.onclick = ()=>{
-      const blob = new Blob([calledNames.join('\n')], {type:'text/plain;charset=utf-8'});
+    exportCalled.onclick = () => {
+      const blob = new Blob([calledNames.join('\n')], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = 'called_names.txt';
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
 
-    clearCalled.onclick = ()=>{
-      if(!confirm('确认清除已点名单？此操作不可恢复。')) return;
+    clearCalled.onclick = () => {
+      if (!confirm('确认清除已点名单？此操作不可恢复。')) return;
       allNames = allNames.concat(calledNames);
       calledNames = [];
       saveToStorage();
@@ -559,10 +754,10 @@
     }
 
     // 页面离开时自动保存当前 textarea
-    window.addEventListener('beforeunload', ()=>{
+    window.addEventListener('beforeunload', () => {
       const parsed = parseInput();
       // 将当前 textarea 写回 allNames（以防编辑还没点加载）
-      if(parsed.length>0){
+      if (parsed.length > 0) {
         allNames = parsed.filter(n => !calledNames.includes(n));
       }
       saveToStorage();
@@ -642,4 +837,5 @@
 
   </script>
 </body>
+
 </html>
