@@ -70,6 +70,7 @@
             <div style="display:flex;gap:8px">
               <button id="copyCalled" class="small ghost">复制</button>
               <button id="exportCalled" class="small">导出</button>
+              <button id="createPR" class="small">创建 PR</button>
               <button id="clearCalled" class="small ghost">清除</button>
             </div>
           </div>
@@ -90,6 +91,7 @@
 
   </div>
 
+  <!-- GitHub 导入 Modal（原有） -->
   <div id="githubModal" class="modal">
     <div class="modal-content">
       <button class="modal-close" id="closeModal">×</button>
@@ -99,6 +101,44 @@
       <button id="fetchCSV" style="width:100%;padding:8px;background:var(--accent);color:var(--card);border:none;">获取
         CSV 文件</button>
       <div id="csvFiles" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- 新增：创建 PR Modal -->
+  <div id="githubPRModal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" id="closePRModal">×</button>
+      <h3>将已点名单创建为 Pull Request</h3>
+
+      <label style="font-size:13px;color:var(--muted)">目标仓库（owner/repo）</label>
+      <input type="text" id="prRepo" placeholder="例如：yourname/yourrepo"
+        style="width:100%;padding:8px;margin-bottom:8px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
+
+      <label style="font-size:13px;color:var(--muted)">文件路径（仓库内保存路径）</label>
+      <input type="text" id="prFilePath" placeholder="例如：rollcall/called_names_YYYYMMDD.txt"
+        style="width:100%;padding:8px;margin-bottom:8px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
+
+      <label style="font-size:13px;color:var(--muted)">PR 标题</label>
+      <input type="text" id="prTitle" placeholder="例如：Add called names (2025-09-15)"
+        style="width:100%;padding:8px;margin-bottom:8px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
+
+      <label style="font-size:13px;color:var(--muted)">可选分支名（若留空，自动生成）</label>
+      <input type="text" id="prBranch" placeholder="例如：rollcall/called-names-20250915"
+        style="width:100%;padding:8px;margin-bottom:8px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
+
+      <label style="font-size:13px;color:var(--muted)">GitHub 个人访问令牌（PAT）</label>
+      <input type="password" id="prToken" placeholder="输入 PAT（仅在本次会话内使用，不会保存）"
+        style="width:100%;padding:8px;margin-bottom:10px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
+
+      <div style="display:flex;gap:8px">
+        <button id="submitPR" style="flex:1;padding:10px;background:#10b981;color:white;border:none">创建 PR</button>
+        <button id="cancelPR" class="small ghost" style="flex:1">取消</button>
+      </div>
+
+      <div id="prStatus" style="margin-top:10px;color:var(--muted);font-size:13px"></div>
+      <div style="margin-top:8px;color:var(--muted);font-size:12px">
+        <strong>安全说明：</strong>PAT 仅在内存中使用，不会保存在 localStorage。若提交到私有仓库，PAT 需具备 <code>repo</code> 权限；提交到公开仓库，PAT 需具备 <code>public_repo</code> 权限。
+      </div>
     </div>
   </div>
 

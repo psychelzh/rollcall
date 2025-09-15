@@ -29,6 +29,7 @@ if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
 initTheme();
 
 // 简单的单页点名器逻辑（无依赖，适合 GitHub Pages）
+// ——（原有变量与逻辑保留）——
 function updateNamesInputTitle(filename) {
   const nameWithoutExt = filename.replace(/\.csv$/, '');
   const truncated = nameWithoutExt.length > 15 ? nameWithoutExt.substring(0, 15) + '...' : nameWithoutExt;
@@ -49,6 +50,35 @@ const exportCalled = document.getElementById('exportCalled');
 const clearCalled = document.getElementById('clearCalled');
 const modeLabel = document.getElementById('modeLabel');
 const namesInputTitle = document.getElementById('namesInputTitle');
+
+// 新增：Create PR 按钮与模态元素
+const createPRBtn = document.getElementById('createPR');
+const githubPRModal = document.getElementById('githubPRModal');
+const closePRModal = document.getElementById('closePRModal');
+const prRepoInput = document.getElementById('prRepo');
+const prFilePathInput = document.getElementById('prFilePath');
+const prTitleInput = document.getElementById('prTitle');
+const prBranchInput = document.getElementById('prBranch');
+const prTokenInput = document.getElementById('prToken');
+const submitPRBtn = document.getElementById('submitPR');
+const cancelPRBtn = document.getElementById('cancelPR');
+const prStatus = document.getElementById('prStatus');
+
+createPRBtn.onclick = () => {
+  // 预填一些默认值
+  const now = new Date();
+  const ts = now.toISOString().slice(0,19).replace(/[:-]/g,'').replace('T','_');
+  prFilePathInput.value = prFilePathInput.value || `rollcall/called_names_${ts}.txt`;
+  prTitleInput.value = prTitleInput.value || `Add called names (${now.toISOString().slice(0,10)})`;
+  prBranchInput.value = prBranchInput.value || `rollcall/called-names-${now.toISOString().slice(0,10).replace(/-/g,'')}`;
+  prTokenInput.value = ''; // 不回显 token（安全）
+  prStatus.textContent = '';
+  githubPRModal.style.display = 'flex';
+};
+
+closePRModal.onclick = () => { githubPRModal.style.display = 'none'; };
+cancelPRBtn.onclick = () => { githubPRModal.style.display = 'none'; };
+githubPRModal.onclick = (e) => { if (e.target === githubPRModal) githubPRModal.style.display = 'none'; };
 
 // Storage keys
 const STORAGE_ALL = 'rollcall_all_names_v1';
@@ -116,16 +146,13 @@ function updateUIState(updateDisplay = true) {
   toggleRollBtn.classList.toggle('ghost', !hasNames);
 
   // 更新"打乱顺序"和"清空名单"按钮状态
-  // 清空名单按钮应该在完全没有名单时禁用（既没有待点名单也没有已点名单）
   const hasAnyNames = hasNames || calledNames.length > 0;
   shuffleBtn.disabled = !hasNames;
   clearAllBtn.disabled = !hasAnyNames;
 
-  // 统一按钮样式处理：禁用时使用ghost样式
   shuffleBtn.classList.toggle('ghost', !hasNames);
   clearAllBtn.classList.toggle('ghost', !hasAnyNames);
 
-  // 清空名单按钮启用时使用危险红色样式
   if (!clearAllBtn.disabled) {
     clearAllBtn.style.background = '#dc2626';
     clearAllBtn.style.color = 'white';
@@ -134,14 +161,16 @@ function updateUIState(updateDisplay = true) {
     clearAllBtn.style.color = '';
   }
 
-  // 更新已点名单相关按钮状态（复制、导出、清空）
+  // 已点名单相关按钮状态
   const hasCalledNames = calledNames.length > 0;
   copyCalled.disabled = !hasCalledNames;
   exportCalled.disabled = !hasCalledNames;
   clearCalled.disabled = !hasCalledNames;
+  createPRBtn.disabled = !hasCalledNames;
   copyCalled.classList.toggle('ghost', !hasCalledNames);
   exportCalled.classList.toggle('ghost', !hasCalledNames);
   clearCalled.classList.toggle('ghost', !hasCalledNames);
+  createPRBtn.classList.toggle('ghost', !hasCalledNames);
 }
 
 function renderCalledList() {
@@ -407,14 +436,13 @@ clearCalled.onclick = () => {
 // 页面离开时自动保存当前 textarea
 window.addEventListener('beforeunload', () => {
   const parsed = parseInput();
-  // 将当前 textarea 写回 allNames（以防编辑还没点加载）
   if (parsed.length > 0) {
     allNames = parsed.filter(n => !calledNames.includes(n));
   }
   saveToStorage();
 });
 
-// GitHub 导入逻辑
+// GitHub 导入逻辑（保留）
 const githubModal = document.getElementById('githubModal');
 const closeModal = document.getElementById('closeModal');
 const fetchCSV = document.getElementById('fetchCSV');
@@ -480,6 +508,137 @@ fetchCSV.onclick = async () => {
   } catch (error) {
     console.error('Error fetching GitHub repo:', error);
     alert('获取仓库内容失败');
+  }
+};
+
+// ----------------- 新增：创建 PR 的主流程函数 -----------------
+/**
+ * 创建 Pull Request 的主要步骤：
+ * 1. 获取仓库信息（以获取 default_branch）
+ * 2. 获取 default_branch 的 latest commit SHA
+ * 3. 创建新分支（基于 default_branch）
+ * 4. 在新分支上创建文件（PUT /contents/{path}）
+ * 5. 创建 PR（POST /pulls）
+ *
+ * 注意：PAT（个人访问令牌）必须具备适当权限（public_repo 或 repo）
+ */
+async function createPullRequestFlow({ token, repo, branch, filePath, contentBase64, prTitle, prBody }) {
+  const headers = {
+    'Accept': 'application/vnd.github.v3+json',
+    'Authorization': `token ${token}`
+  };
+
+  // 1. 获取仓库信息（含 default_branch）
+  let repoResp = await fetch(`https://api.github.com/repos/${repo}`, { headers });
+  if (!repoResp.ok) throw new Error(`无法获取仓库信息：${repoResp.status} ${repoResp.statusText}`);
+  const repoJson = await repoResp.json();
+  const defaultBranch = repoJson.default_branch;
+
+  // 2. 获取 default_branch 的 commit sha
+  const refResp = await fetch(`https://api.github.com/repos/${repo}/git/refs/heads/${defaultBranch}`, { headers });
+  if (!refResp.ok) throw new Error(`无法获取默认分支引用：${refResp.status} ${refResp.statusText}`);
+  const refJson = await refResp.json();
+  const baseSha = refJson.object.sha;
+
+  // 3. 创建新分支（若分支已存在则继续使用）
+  const branchRef = `refs/heads/${branch}`;
+  // 先检测分支是否存在
+  const checkBranch = await fetch(`https://api.github.com/repos/${repo}/git/refs/heads/${branch}`, { headers });
+  if (!checkBranch.ok) {
+    // 分支不存在 -> 创建
+    const createRefResp = await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: branchRef, sha: baseSha })
+    });
+    if (!createRefResp.ok) {
+      const txt = await createRefResp.text();
+      throw new Error(`创建分支失败：${createRefResp.status} ${createRefResp.statusText} ${txt}`);
+    }
+  } // else 分支已存在，直接使用
+
+  // 4. 在指定分支上创建文件（PUT /repos/{owner}/{repo}/contents/{path}）
+  const putResp = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, {
+    method: 'PUT',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: prTitle || `Add called names`,
+      content: contentBase64,
+      branch
+    })
+  });
+  if (!putResp.ok) {
+    const txt = await putResp.text();
+    throw new Error(`创建文件失败：${putResp.status} ${putResp.statusText} ${txt}`);
+  }
+  const putJson = await putResp.json();
+
+  // 5. 创建 Pull Request
+  const prResp = await fetch(`https://api.github.com/repos/${repo}/pulls`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: prTitle || `Add called names`,
+      head: branch,
+      base: defaultBranch,
+      body: prBody || `Add called names via rollcall tool.`
+    })
+  });
+  if (!prResp.ok) {
+    const txt = await prResp.text();
+    throw new Error(`创建 PR 失败：${prResp.status} ${prResp.statusText} ${txt}`);
+  }
+  const prJson = await prResp.json();
+  return prJson;
+}
+
+// 点击“创建 PR”模态的提交按钮逻辑
+submitPRBtn.onclick = async () => {
+  const repo = prRepoInput.value.trim();
+  const filePath = prFilePathInput.value.trim();
+  const prTitle = prTitleInput.value.trim();
+  let branch = prBranchInput.value.trim();
+  const token = prTokenInput.value.trim();
+
+  if (!repo || !filePath || !token) {
+    prStatus.textContent = '请填写目标仓库、文件路径与 PAT。';
+    return;
+  }
+  // 生成内容：已点名单（按行）
+  const contentText = calledNames.join('\n') || '';
+  if (!contentText) {
+    prStatus.textContent = '已点名单为空，无法创建 PR。';
+    return;
+  }
+
+  // 默认分支名若为空，则由 API 自动生成带时间戳的分支名
+  if (!branch) {
+    const now = new Date();
+    branch = `rollcall/called-${now.toISOString().slice(0,19).replace(/[:-]/g,'').replace('T','_')}`;
+  }
+
+  prStatus.textContent = '正在创建分支与提交，请稍候...';
+  submitPRBtn.disabled = true;
+
+  try {
+    // 将 contentText 按 UTF-8 编码为 Base64（兼容中文）
+    function utf8_to_b64(str) {
+      return btoa(unescape(encodeURIComponent(str)));
+    }
+    const contentBase64 = utf8_to_b64(contentText);
+
+    const prJson = await createPullRequestFlow({
+      token, repo, branch, filePath, contentBase64, prTitle, prBody: `Called names created by rollcall tool.`
+    });
+
+    prStatus.innerHTML = `PR 已创建：<a href="${prJson.html_url}" target="_blank">${prJson.html_url}</a>`;
+    // 关闭模态（若希望用户能查看链接可不关闭）
+    // githubPRModal.style.display = 'none';
+  } catch (err) {
+    console.error(err);
+    prStatus.textContent = `操作失败：${err.message}`;
+  } finally {
+    submitPRBtn.disabled = false;
   }
 };
 
