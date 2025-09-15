@@ -1,0 +1,487 @@
+// 主题切换：支持 白天 / 夜间，保存在 localStorage
+const THEME_KEY = 'rollcall_theme_v1';
+const themeToggle = document.getElementById('themeToggle');
+function applyTheme(theme) {
+  if (theme === 'light') document.documentElement.classList.add('light-theme');
+  else document.documentElement.classList.remove('light-theme');
+  if (themeToggle) themeToggle.textContent = (theme === 'light') ? '☀️' : '🌙';
+}
+function initTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved) { applyTheme(saved); return; }
+    // 若无保存，使用系统偏好
+    const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    applyTheme(prefersLight ? 'light' : 'dark');
+  } catch (e) { console.warn('theme init error', e); }
+}
+function toggleTheme() {
+  try {
+    const isLight = document.documentElement.classList.contains('light-theme');
+    const next = isLight ? 'dark' : 'light';
+    applyTheme(next);
+    localStorage.setItem(THEME_KEY, next);
+  } catch (e) { console.warn(e); }
+}
+if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+
+// 初始化主题（在页面其它逻辑前）
+initTheme();
+
+// 简单的单页点名器逻辑（无依赖，适合 GitHub Pages）
+function updateNamesInputTitle(filename) {
+  const nameWithoutExt = filename.replace(/\.csv$/, '');
+  const truncated = nameWithoutExt.length > 15 ? nameWithoutExt.substring(0, 15) + '...' : nameWithoutExt;
+  namesInputTitle.textContent = truncated;
+  namesInputTitle.title = nameWithoutExt;
+}
+const namesInput = document.getElementById('namesInput');
+const shuffleBtn = document.getElementById('shuffle');
+const clearAllBtn = document.getElementById('clearAll');
+const totalCount = document.getElementById('totalCount');
+const remainingCount = document.getElementById('remainingCount');
+const nameDisplay = document.getElementById('nameDisplay');
+const toggleRollBtn = document.getElementById('toggleRollBtn');
+const markBtn = document.getElementById('markBtn');
+const calledListEl = document.getElementById('calledList');
+const copyCalled = document.getElementById('copyCalled');
+const exportCalled = document.getElementById('exportCalled');
+const clearCalled = document.getElementById('clearCalled');
+const modeLabel = document.getElementById('modeLabel');
+const namesInputTitle = document.getElementById('namesInputTitle');
+
+// Storage keys
+const STORAGE_ALL = 'rollcall_all_names_v1';
+const STORAGE_CALLED = 'rollcall_called_names_v1';
+
+let allNames = []; // 未点或待点名单
+let calledNames = []; // 已点名单
+let rolling = false;
+let intervalId = null;
+let lastShown = '';
+let modeRandom = true; // 默认随机
+
+// 初始化：从 localStorage 读取
+function loadFromStorage() {
+  try {
+    const rawAll = localStorage.getItem(STORAGE_ALL);
+    const rawCalled = localStorage.getItem(STORAGE_CALLED);
+    allNames = rawAll ? JSON.parse(rawAll) : [];
+    calledNames = rawCalled ? JSON.parse(rawCalled) : [];
+    renderCalledList();
+    updateCounts();
+    namesInput.value = allNames.join('\n');
+    updateUIState(); // 添加UI状态更新
+  } catch (e) {
+    console.error('storage load error', e);
+  }
+}
+
+function saveToStorage() {
+  localStorage.setItem(STORAGE_ALL, JSON.stringify(allNames));
+  localStorage.setItem(STORAGE_CALLED, JSON.stringify(calledNames));
+}
+
+function parseInput() {
+  const raw = namesInput.value.trim();
+  if (!raw) return [];
+  // 支持换行、逗号、分号分隔
+  const items = raw.split(/[\n,;，；]+/).map(s => s.trim()).filter(Boolean);
+  return Array.from(new Set(items)); // 去重
+}
+
+function updateCounts() {
+  totalCount.textContent = '总数: ' + (allNames.length + calledNames.length);
+  remainingCount.textContent = '剩余: ' + (allNames.length);
+}
+
+// 更新UI状态函数
+function updateUIState(updateDisplay = true) {
+  const hasNames = allNames.length > 0;
+
+  if (updateDisplay) {
+    if (allNames.length === 0) {
+      if (calledNames.length === 0) {
+        nameDisplay.textContent = '名单为空，请导入名单';
+      } else {
+        nameDisplay.textContent = '所有学生已点名完毕';
+      }
+    } else {
+      nameDisplay.textContent = '点击"开始滚动"开始点名';
+    }
+  }
+
+  // 更新按钮状态
+  toggleRollBtn.disabled = !hasNames;
+  toggleRollBtn.classList.toggle('ghost', !hasNames);
+
+  // 更新"打乱顺序"和"清空名单"按钮状态
+  // 清空名单按钮应该在完全没有名单时禁用（既没有待点名单也没有已点名单）
+  const hasAnyNames = hasNames || calledNames.length > 0;
+  shuffleBtn.disabled = !hasNames;
+  clearAllBtn.disabled = !hasAnyNames;
+
+  // 统一按钮样式处理：禁用时使用ghost样式
+  shuffleBtn.classList.toggle('ghost', !hasNames);
+  clearAllBtn.classList.toggle('ghost', !hasAnyNames);
+
+  // 清空名单按钮启用时使用危险红色样式
+  if (!clearAllBtn.disabled) {
+    clearAllBtn.style.background = '#dc2626';
+    clearAllBtn.style.color = 'white';
+  } else {
+    clearAllBtn.style.background = '';
+    clearAllBtn.style.color = '';
+  }
+
+  // 更新已点名单相关按钮状态（复制、导出、清空）
+  const hasCalledNames = calledNames.length > 0;
+  copyCalled.disabled = !hasCalledNames;
+  exportCalled.disabled = !hasCalledNames;
+  clearCalled.disabled = !hasCalledNames;
+  copyCalled.classList.toggle('ghost', !hasCalledNames);
+  exportCalled.classList.toggle('ghost', !hasCalledNames);
+  clearCalled.classList.toggle('ghost', !hasCalledNames);
+}
+
+function renderCalledList() {
+  const fragment = document.createDocumentFragment();
+  calledNames.forEach((name, idx) => {
+    const div = document.createElement('div');
+    div.className = 'called-item';
+    div.dataset.idx = idx;
+    const left = document.createElement('div');
+    left.textContent = name;
+    const right = document.createElement('div');
+    right.style.display = 'flex'; right.style.gap = '8px';
+    const rm = document.createElement('button'); rm.textContent = '移除'; rm.className = 'small ghost';
+    rm.dataset.action = 'remove';
+    right.appendChild(rm);
+    div.appendChild(left);
+    div.appendChild(right);
+    fragment.appendChild(div);
+  });
+  calledListEl.innerHTML = '';
+  calledListEl.appendChild(fragment);
+}
+
+// 事件委托：处理已点名单中的按钮点击
+calledListEl.addEventListener('click', (e) => {
+  const button = e.target.closest('button[data-action="remove"]');
+  if (!button) return;
+  const item = button.closest('.called-item');
+  const idx = parseInt(item.dataset.idx);
+  const name = calledNames[idx];
+  calledNames.splice(idx, 1);
+  allNames.push(name);
+  saveToStorage();
+  renderCalledList();
+  updateCounts();
+  namesInput.value = allNames.join('\n');
+});
+
+shuffleBtn.onclick = () => {
+  for (let i = allNames.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allNames[i], allNames[j]] = [allNames[j], allNames[i]];
+  }
+  nameDisplay.textContent = '名单已打乱';
+  namesInput.value = allNames.join('\n');
+  saveToStorage();
+}
+
+clearAllBtn.onclick = () => {
+  if (!confirm('确认清空全部名单吗？此操作将清空所有名单，包括待点名单和已点名单。')) return;
+  allNames = [];
+  calledNames = [];
+  namesInput.value = '';
+  updateCounts();
+  saveToStorage();
+  renderCalledList();
+  nameDisplay.textContent = '已清空';
+  updateUIState(); // 添加UI状态更新
+}
+
+toggleRollBtn.onclick = () => {
+  if (!rolling) {
+    // 若当前输入框未加载到存量，则尝试加载
+    if (allNames.length === 0) {
+      const parsed = parseInput();
+      if (parsed.length === 0) { alert('名单为空，请先粘贴或加载名单。'); return; }
+      allNames = parsed.filter(n => !calledNames.includes(n));
+      saveToStorage();
+    }
+    rolling = true;
+    toggleRollBtn.textContent = '停止';
+    nameDisplay.classList.add('blur');
+    modeRandom = true; // 进入滚动时默认随机
+    modeLabel.textContent = '随机';
+    // 节流函数
+    function throttle(func, limit) {
+      let lastFunc;
+      let lastRan;
+      return function () {
+        const context = this;
+        const args = arguments;
+        if (!lastRan) {
+          func.apply(context, args);
+          lastRan = Date.now();
+        } else {
+          clearTimeout(lastFunc);
+          lastFunc = setTimeout(function () {
+            if ((Date.now() - lastRan) >= limit) {
+              func.apply(context, args);
+              lastRan = Date.now();
+            }
+          }, limit - (Date.now() - lastRan));
+        }
+      };
+    }
+
+    intervalId = setInterval(throttle(() => {
+      if (allNames.length === 0) { nameDisplay.textContent = '无候选'; return; }
+      // 随机取一个但不立即移除，选择时在 stop 时处理
+      const pick = allNames[Math.floor(Math.random() * allNames.length)];
+      lastShown = pick;
+      nameDisplay.textContent = pick;
+    }, 100), 60);
+  } else {
+    rolling = false;
+    toggleRollBtn.textContent = '开始滚动';
+    nameDisplay.classList.remove('blur');
+    if (intervalId) clearInterval(intervalId);
+    // 选中当前显示的名字
+    const chosen = lastShown || nameDisplay.textContent;
+    if (!chosen || chosen === '点击"开始滚动"开始' || chosen === '名单已加载' || chosen === '无候选') {
+      nameDisplay.textContent = '未能选中有效姓名';
+      return;
+    }
+    // 将选中者从 allNames 移到 calledNames
+    const idx = allNames.indexOf(chosen);
+    if (idx !== -1) allNames.splice(idx, 1);
+    if (!calledNames.includes(chosen)) calledNames.unshift(chosen);
+    saveToStorage();
+    renderCalledList();
+    updateCounts();
+    nameDisplay.textContent = chosen; // 显示选中的名字
+
+    // 从文本框显示中移除选中的名字
+    const currentText = namesInput.value;
+    const lines = currentText.split('\n').filter(line => line.trim() !== chosen);
+    namesInput.value = lines.join('\n');
+
+    updateUIState(false); // 更新按钮状态但不覆盖显示内容
+  }
+}
+
+// 动态更新"手动标记"按钮状态
+function updateMarkBtnState() {
+  const textarea = namesInput;
+  const startPos = textarea.selectionStart;
+  const endPos = textarea.selectionEnd;
+  let hasSelection = false;
+
+  if (startPos !== endPos) {
+    hasSelection = true;
+  } else {
+    const text = textarea.value;
+    const lines = text.split('\n');
+    let lineStart = 0;
+    let lineEnd = 0;
+
+    for (const line of lines) {
+      lineEnd = lineStart + line.length + 1;
+      if (startPos >= lineStart && startPos < lineEnd) {
+        hasSelection = line.trim().length > 0;
+        break;
+      }
+      lineStart = lineEnd;
+    }
+  }
+
+  markBtn.disabled = !hasSelection;
+  markBtn.classList.toggle('ghost', !hasSelection);
+}
+
+// 监听输入框的选中和光标变化
+namesInput.addEventListener('select', updateMarkBtnState);
+namesInput.addEventListener('click', updateMarkBtnState);
+namesInput.addEventListener('keyup', updateMarkBtnState);
+
+// 监听输入框内容变化，只在文本框完全清空且不是滚动点名过程中更新数据
+namesInput.addEventListener('input', () => {
+  const parsed = parseInput();
+  if (parsed.length === 0 && !rolling) {
+    // 手动清空文本框且不在滚动过程中时，清空待点名单
+    allNames = [];
+    saveToStorage();
+    updateCounts();
+    updateUIState();
+  } else {
+    // 有内容时自动录入到allNames
+    allNames = parsed.filter(n => !calledNames.includes(n));
+    saveToStorage();
+    updateCounts();
+    updateUIState();
+  }
+});
+// 每次输入后自动刷新相关按钮UI状态
+namesInput.addEventListener('input', updateMarkBtnState);
+
+// 初始化按钮状态
+updateMarkBtnState();
+
+markBtn.onclick = () => {
+  if (markBtn.disabled) return;
+
+  // 获取当前输入框中光标所在行的文本
+  const textarea = namesInput;
+  const startPos = textarea.selectionStart;
+  const endPos = textarea.selectionEnd;
+
+  // 如果选中了文本，则使用选中文本；否则获取光标所在行的文本
+  let selectedText = '';
+  if (startPos !== endPos) {
+    selectedText = textarea.value.substring(startPos, endPos).trim();
+  } else {
+    // 获取光标所在行的文本
+    const text = textarea.value;
+    const lines = text.split('\n');
+    let lineStart = 0;
+    let lineEnd = 0;
+    let currentLine = '';
+
+    for (const line of lines) {
+      lineEnd = lineStart + line.length + 1; // +1 for the newline character
+      if (startPos >= lineStart && startPos < lineEnd) {
+        currentLine = line.trim();
+        break;
+      }
+      lineStart = lineEnd;
+    }
+    selectedText = currentLine;
+  }
+
+  if (!selectedText) return alert('未检测到姓名可标记');
+
+  // 支持多行
+  const items = selectedText.split(/[\n,;，；]+/).map(s => s.trim()).filter(Boolean);
+  items.forEach(it => {
+    const idx = allNames.indexOf(it);
+    if (idx !== -1) allNames.splice(idx, 1);
+    if (!calledNames.includes(it)) calledNames.unshift(it);
+  });
+  saveToStorage(); renderCalledList(); updateCounts(); namesInput.value = allNames.join('\n');
+
+  // 标记完成后禁用按钮，直到下一次选中
+  markBtn.disabled = true;
+  markBtn.classList.add('ghost');
+}
+
+copyCalled.onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(calledNames.join('\n'));
+    alert('已复制到剪贴板');
+  } catch (e) { alert('复制失败，请手动选择并复制。'); }
+}
+
+exportCalled.onclick = () => {
+  const blob = new Blob([calledNames.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'called_names.txt';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+clearCalled.onclick = () => {
+  if (!confirm('确认清除已点名单？此操作不可恢复。')) return;
+  allNames = allNames.concat(calledNames);
+  calledNames = [];
+  saveToStorage();
+  renderCalledList();
+  updateCounts();
+  namesInput.value = allNames.join('\n');
+  updateUIState(); // 添加UI状态更新
+}
+
+// 页面离开时自动保存当前 textarea
+window.addEventListener('beforeunload', () => {
+  const parsed = parseInput();
+  // 将当前 textarea 写回 allNames（以防编辑还没点加载）
+  if (parsed.length > 0) {
+    allNames = parsed.filter(n => !calledNames.includes(n));
+  }
+  saveToStorage();
+});
+
+// GitHub 导入逻辑
+const githubModal = document.getElementById('githubModal');
+const closeModal = document.getElementById('closeModal');
+const fetchCSV = document.getElementById('fetchCSV');
+const githubRepo = document.getElementById('githubRepo');
+const csvFiles = document.getElementById('csvFiles');
+const importFromGitHub = document.getElementById('importFromGitHub');
+
+importFromGitHub.onclick = () => {
+  githubModal.style.display = 'flex';
+};
+
+githubModal.onclick = (e) => {
+  if (e.target === githubModal) {
+    githubModal.style.display = 'none';
+  }
+};
+
+closeModal.onclick = () => {
+  githubModal.style.display = 'none';
+};
+
+fetchCSV.onclick = async () => {
+  const repo = githubRepo.value.trim();
+  if (!repo) return alert('请输入 GitHub 仓库地址');
+
+  try {
+    const response = await fetch(`https://api.github.com/repos/${repo}/contents`);
+    const data = await response.json();
+    const csvFilesList = data.filter(file => file.name.endsWith('.csv'));
+
+    if (csvFilesList.length === 0) {
+      csvFiles.innerHTML = '未找到 CSV 文件';
+      return;
+    }
+
+    csvFiles.innerHTML = '<h4>选择 CSV 文件：</h4>';
+    csvFilesList.forEach(file => {
+      const button = document.createElement('button');
+      button.textContent = file.name;
+      button.style.margin = '5px';
+      button.onclick = async () => {
+        try {
+          const csvResponse = await fetch(file.download_url);
+          const csvText = await csvResponse.text();
+          const names = csvText.split('\n').map(line => line.trim()).filter(Boolean);
+          namesInput.value = names.join('\n');
+          calledNames = []; // 清空已点名单
+          allNames = names;
+          renderCalledList(); // 更新已点名单显示
+          saveToStorage();
+          updateCounts();
+          updateNamesInputTitle(file.name);
+          githubModal.style.display = 'none';
+          nameDisplay.textContent = 'CSV 文件已加载';
+          updateUIState(); // 更新按钮状态
+        } catch (error) {
+          console.error('Error loading CSV:', error);
+          alert('加载 CSV 文件失败');
+        }
+      };
+      csvFiles.appendChild(button);
+    });
+  } catch (error) {
+    console.error('Error fetching GitHub repo:', error);
+    alert('获取仓库内容失败');
+  }
+};
+
+// 初次加载
+loadFromStorage();

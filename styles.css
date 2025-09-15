@@ -1,0 +1,241 @@
+:root {
+  --bg: #0f1724;
+  --card: #0b1220;
+  --accent: #60a5fa;
+  --muted: #94a3b8;
+  --glass: rgba(255, 255, 255, 0.03);
+  --text: #e6eef8
+}
+
+/* 白天主题覆盖 */
+.light-theme {
+  --bg: #f6fafc;
+  --card: #ffffff;
+  --accent: #2563eb;
+  --muted: #4b5563;
+  --glass: rgba(2, 6, 23, 0.03);
+  --text: #0b1220
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, 'Noto Sans SC', "Helvetica Neue", "PingFang SC", Arial;
+  background: linear-gradient(180deg, var(--bg) 0%, rgba(0, 0, 0, 0) 100%);
+  color: var(--text);
+  transition: background-color 240ms linear, color 240ms linear;
+  overflow: hidden
+}
+
+.app {
+  max-width: 980px;
+  margin: 28px auto;
+  padding: 20px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+  box-shadow: 0 6px 30px rgba(2, 6, 23, 0.7)
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px
+}
+
+.row {
+  display: flex;
+  gap: 18px;
+  margin-top: 16px
+}
+
+.col {
+  flex: 1;
+  min-width: 0
+}
+
+.card {
+  background: var(--card);
+  padding: 14px;
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02)
+}
+
+textarea {
+  height: 160px;
+  width: 100%;
+  resize: vertical;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.02);
+  color: inherit;
+  box-sizing: border-box;
+  overflow-y: auto
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px
+}
+
+button {
+  border: 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--card);
+  font-weight: 600;
+  cursor: pointer
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-weight: 500
+}
+
+.big {
+  padding: 14px 18px;
+  font-size: 16px
+}
+
+.viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 220px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0.00));
+}
+
+.name-display {
+  font-size: 36px;
+  font-weight: 700;
+  transition: filter 160ms linear, transform 160ms linear, opacity 160ms linear
+}
+
+.blur {
+  filter: blur(6px) saturate(1.05) contrast(1.02);
+  transform: scale(1.02);
+  opacity: 0.9
+}
+
+.meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px
+}
+
+.called-list {
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent)
+}
+
+.called-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.06)
+}
+
+.muted {
+  color: var(--muted)
+}
+
+.small {
+  font-size: 13px;
+  padding: 6px 8px
+}
+
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center
+}
+
+.kbd {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 13px
+}
+
+footer {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px
+}
+
+.theme-toggle {
+  background: transparent;
+  border: 0;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px
+}
+
+@media (max-width:760px) {
+  .row {
+    flex-direction: column
+  }
+
+  .viewer {
+    height: 180px
+  }
+
+  .name-display {
+    font-size: 26px
+  }
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background: var(--card);
+  padding: 20px;
+  border-radius: 10px;
+  width: 80%;
+  max-width: 500px;
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+}
