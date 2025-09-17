@@ -48,7 +48,6 @@ const calledListEl = document.getElementById('calledList');
 const copyCalled = document.getElementById('copyCalled');
 const exportCalled = document.getElementById('exportCalled');
 const clearCalled = document.getElementById('clearCalled');
-const modeLabel = document.getElementById('modeLabel');
 const namesInputTitle = document.getElementById('namesInputTitle');
 
 // 新增：Create PR 按钮与模态元素
@@ -89,7 +88,6 @@ let calledNames = []; // 已点名单
 let rolling = false;
 let intervalId = null;
 let lastShown = '';
-let modeRandom = true; // 默认随机
 
 // 初始化：从 localStorage 读取
 function loadFromStorage() {
@@ -261,8 +259,7 @@ toggleRollBtn.onclick = () => {
     rolling = true;
     toggleRollBtn.textContent = '停止';
     nameDisplay.classList.add('blur');
-    modeRandom = true; // 进入滚动时默认随机
-    modeLabel.textContent = '随机';
+
     // 节流函数
     function throttle(func, limit) {
       let lastFunc;
