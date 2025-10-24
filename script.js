@@ -260,50 +260,36 @@ toggleRollBtn.onclick = () => {
     toggleRollBtn.textContent = '停止';
     nameDisplay.classList.add('blur');
 
-    // 节流函数
-    function throttle(func, limit) {
-      let lastFunc;
-      let lastRan;
-      return function () {
-        const context = this;
-        const args = arguments;
-        if (!lastRan) {
-          func.apply(context, args);
-          lastRan = Date.now();
-        } else {
-          clearTimeout(lastFunc);
-          lastFunc = setTimeout(function () {
-            if ((Date.now() - lastRan) >= limit) {
-              func.apply(context, args);
-              lastRan = Date.now();
-            }
-          }, limit - (Date.now() - lastRan));
-        }
-      };
-    }
-
-    intervalId = setInterval(throttle(() => {
+    // 简化：直接用固定间隔的 setInterval 更新展示，避免复杂节流造成的延迟残留覆盖问题
+    intervalId = setInterval(() => {
       if (allNames.length === 0) { nameDisplay.textContent = '无候选'; return; }
-      // 随机取一个但不立即移除，选择时在 stop 时处理
-      const pick = allNames[Math.floor(Math.random() * allNames.length)];
+      let pick = allNames[Math.floor(Math.random() * allNames.length)];
+      if (typeof pick === 'string') pick = pick.trim();
       lastShown = pick;
       nameDisplay.textContent = pick;
-    }, 100), 60);
+    }, 60);
   } else {
     rolling = false;
     toggleRollBtn.textContent = '开始滚动';
     nameDisplay.classList.remove('blur');
     if (intervalId) clearInterval(intervalId);
     // 选中当前显示的名字
-    const chosen = lastShown || nameDisplay.textContent;
+    // 规范化选中项，优先使用内部记录的 lastShown
+    const rawChosen = lastShown || nameDisplay.textContent;
+    const chosen = (typeof rawChosen === 'string') ? rawChosen.trim() : rawChosen;
+
     if (!chosen || chosen === '点击"开始滚动"开始' || chosen === '名单已加载' || chosen === '无候选') {
       nameDisplay.textContent = '未能选中有效姓名';
       return;
     }
     // 将选中者从 allNames 移到 calledNames
-    const idx = allNames.indexOf(chosen);
+    // 使用 trim 比较，兼容 allNames 中潜在的空白字符
+    const idx = allNames.findIndex(n => (typeof n === 'string' ? n.trim() : n) === chosen);
+
     if (idx !== -1) allNames.splice(idx, 1);
-    if (!calledNames.includes(chosen)) calledNames.unshift(chosen);
+    const toAdd = (typeof chosen === 'string') ? chosen : String(chosen);
+    if (!calledNames.includes(toAdd)) calledNames.unshift(toAdd);
+
     saveToStorage();
     renderCalledList();
     updateCounts();
@@ -503,16 +489,22 @@ fetchCSV.onclick = async () => {
           const csvResponse = await fetch(file.download_url);
           const csvText = await csvResponse.text();
           const names = csvText.split('\n').map(line => line.trim()).filter(Boolean);
-          namesInput.value = names.join('\n');
-          calledNames = []; // 清空已点名单
-          allNames = names;
-          renderCalledList(); // 更新已点名单显示
+          // 先设置数据模型：清空已点名单并设置待点名单
+          calledNames = [];
+          allNames = names.slice();
+          // 将文本框与数据同步（保证 textarea 与 allNames 完全一致）
+          namesInput.value = allNames.join('\n');
+          // 持久化并刷新 UI（先保存再渲染，避免 race）
           saveToStorage();
+          renderCalledList(); // 更新已点名单显示（目前为空）
           updateCounts();
           updateNamesInputTitle(file.name);
+          // 触发 input 事件以保证其他监听器（例如 mark 按钮状态）同步
+          namesInput.dispatchEvent(new Event('input', { bubbles: true }));
+          // 关闭 modal 并显示加载完成状态，不让 updateUIState 覆盖这个展示
           githubModal.style.display = 'none';
+          updateUIState(false);
           nameDisplay.textContent = 'CSV 文件已加载';
-          updateUIState(); // 更新按钮状态
         } catch (error) {
           console.error('Error loading CSV:', error);
           alert('加载 CSV 文件失败');
