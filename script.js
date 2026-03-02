@@ -265,6 +265,7 @@ calledListEl.addEventListener('click', (e) => {
   renderCalledList();
   updateCounts();
   namesInput.value = allNames.join('\n');
+  updateUIState(false);
 });
 
 shuffleBtn.onclick = () => {
