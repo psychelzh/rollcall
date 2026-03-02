@@ -36,6 +36,12 @@ function updateNamesInputTitle(filename) {
   namesInputTitle.textContent = truncated;
   namesInputTitle.title = nameWithoutExt;
 }
+
+function resetNamesInputTitle() {
+  const defaultText = '名单输入（每行一个姓名）';
+  namesInputTitle.textContent = defaultText;
+  namesInputTitle.title = defaultText;
+}
 const namesInput = document.getElementById('namesInput');
 const shuffleBtn = document.getElementById('shuffle');
 const clearAllBtn = document.getElementById('clearAll');
@@ -67,8 +73,10 @@ createPRBtn.onclick = () => {
   // 预填一些默认值
   const now = new Date();
   const ts = now.toISOString().slice(0,19).replace(/[:-]/g,'').replace('T','_');
-  prFilePathInput.value = prFilePathInput.value || `rollcall/called_names_${ts}.txt`;
-  prTitleInput.value = prTitleInput.value || `Add called names (${now.toISOString().slice(0,10)})`;
+  const listName = getListNameForPR();
+  const listSlug = sanitizeListNameForPath(listName);
+  prFilePathInput.value = prFilePathInput.value || `rollcall/${listSlug}_called_names_${ts}.txt`;
+  prTitleInput.value = prTitleInput.value || `Add called names - ${listName} (${now.toISOString().slice(0,10)})`;
   prBranchInput.value = prBranchInput.value || `rollcall/called-names-${now.toISOString().slice(0,10).replace(/-/g,'')}`;
   prTokenInput.value = ''; // 不回显 token（安全）
   prStatus.textContent = '';
@@ -82,20 +90,54 @@ githubPRModal.onclick = (e) => { if (e.target === githubPRModal) githubPRModal.s
 // Storage keys
 const STORAGE_ALL = 'rollcall_all_names_v1';
 const STORAGE_CALLED = 'rollcall_called_names_v1';
+const STORAGE_LIST_NAME = 'rollcall_current_list_name_v1';
 
 let allNames = []; // 未点或待点名单
 let calledNames = []; // 已点名单
+let currentListName = '';
 let rolling = false;
 let intervalId = null;
 let lastShown = '';
+
+function normalizeListName(name) {
+  if (!name) return '';
+  return String(name).replace(/\.csv$/i, '').trim();
+}
+
+function sanitizeListNameForPath(name) {
+  const normalized = normalizeListName(name).normalize('NFKC');
+  const slug = normalized
+    .replace(/[^\p{L}\p{N}\-_]+/gu, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+  return slug || 'manual-list';
+}
+
+function setCurrentListName(name) {
+  const normalized = normalizeListName(name);
+  currentListName = normalized;
+  if (normalized) localStorage.setItem(STORAGE_LIST_NAME, normalized);
+  else localStorage.removeItem(STORAGE_LIST_NAME);
+}
+
+function getListNameForPR() {
+  if (currentListName) return currentListName;
+  if (calledNames.length > 0) return `manual-list-${calledNames.length}`;
+  const parsed = parseInput();
+  if (parsed.length > 0) return `manual-list-${parsed.length}`;
+  return 'manual-list';
+}
 
 // 初始化：从 localStorage 读取
 function loadFromStorage() {
   try {
     const rawAll = localStorage.getItem(STORAGE_ALL);
     const rawCalled = localStorage.getItem(STORAGE_CALLED);
+    const rawListName = localStorage.getItem(STORAGE_LIST_NAME);
     allNames = rawAll ? JSON.parse(rawAll) : [];
     calledNames = rawCalled ? JSON.parse(rawCalled) : [];
+    currentListName = rawListName ? normalizeListName(rawListName) : '';
     renderCalledList();
     updateCounts();
     namesInput.value = allNames.join('\n');
@@ -239,6 +281,8 @@ clearAllBtn.onclick = () => {
   if (!confirm('确认清空全部名单吗？此操作将清空所有名单，包括待点名单和已点名单。')) return;
   allNames = [];
   calledNames = [];
+  setCurrentListName('');
+  resetNamesInputTitle();
   namesInput.value = '';
   updateCounts();
   saveToStorage();
@@ -498,6 +542,7 @@ fetchCSV.onclick = async () => {
           saveToStorage();
           renderCalledList(); // 更新已点名单显示（目前为空）
           updateCounts();
+          setCurrentListName(file.name);
           updateNamesInputTitle(file.name);
           // 触发 input 事件以保证其他监听器（例如 mark 按钮状态）同步
           namesInput.dispatchEvent(new Event('input', { bubbles: true }));
