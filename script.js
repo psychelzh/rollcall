@@ -121,12 +121,21 @@ function setCurrentListName(name) {
   else localStorage.removeItem(STORAGE_LIST_NAME);
 }
 
+function getManualListName(count) {
+  const safeCount = Number.isFinite(count) ? count : 0;
+  return safeCount > 0 ? `手动名单-${safeCount}人` : '手动名单';
+}
+
+function isManualListName(name) {
+  return /^手动名单(?:-\d+人)?$/.test((name || '').trim());
+}
+
 function getListNameForPR() {
   if (currentListName) return currentListName;
-  if (calledNames.length > 0) return `manual-list-${calledNames.length}`;
+  if (calledNames.length > 0) return getManualListName(calledNames.length);
   const parsed = parseInput();
-  if (parsed.length > 0) return `manual-list-${parsed.length}`;
-  return 'manual-list';
+  if (parsed.length > 0) return getManualListName(parsed.length);
+  return '手动名单';
 }
 
 // 初始化：从 localStorage 读取
@@ -394,12 +403,19 @@ namesInput.addEventListener('input', () => {
   if (parsed.length === 0 && !rolling) {
     // 手动清空文本框且不在滚动过程中时，清空待点名单
     allNames = [];
+    setCurrentListName('');
+    resetNamesInputTitle();
     saveToStorage();
     updateCounts();
     updateUIState();
   } else {
     // 有内容时自动录入到allNames
     allNames = parsed.filter(n => !calledNames.includes(n));
+    if (!currentListName || isManualListName(currentListName)) {
+      const manualName = getManualListName(parsed.length);
+      setCurrentListName(manualName);
+      updateNamesInputTitle(manualName);
+    }
     saveToStorage();
     updateCounts();
     updateUIState();
