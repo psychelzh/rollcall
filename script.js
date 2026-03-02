@@ -75,9 +75,9 @@ createPRBtn.onclick = () => {
   const ts = now.toISOString().slice(0,19).replace(/[:-]/g,'').replace('T','_');
   const listName = getListNameForPR();
   const listSlug = sanitizeListNameForPath(listName);
-  prFilePathInput.value = prFilePathInput.value || `rollcall/${listSlug}_called_names_${ts}.txt`;
-  prTitleInput.value = prTitleInput.value || `Add called names - ${listName} (${now.toISOString().slice(0,10)})`;
-  prBranchInput.value = prBranchInput.value || `rollcall/called-names-${now.toISOString().slice(0,10).replace(/-/g,'')}`;
+  prFilePathInput.value = `rollcall/${listSlug}_called_names_${ts}.txt`;
+  prTitleInput.value = `Add called names - ${listName} (${now.toISOString().slice(0,10)})`;
+  prBranchInput.value = `rollcall/called-names-${now.toISOString().slice(0,10).replace(/-/g,'')}`;
   prTokenInput.value = ''; // 不回显 token（安全）
   prStatus.textContent = '';
   githubPRModal.style.display = 'flex';
@@ -633,7 +633,7 @@ async function createPullRequestFlow({ token, repo, branch, filePath, contentBas
   const branchRef = `refs/heads/${branch}`;
   // 先检测分支是否存在
   const checkBranch = await fetch(`https://api.github.com/repos/${repo}/git/refs/heads/${branch}`, { headers });
-  if (!checkBranch.ok) {
+  if (checkBranch.status === 404) {
     // 分支不存在 -> 创建
     const createRefResp = await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
       method: 'POST',
@@ -644,10 +644,19 @@ async function createPullRequestFlow({ token, repo, branch, filePath, contentBas
       const txt = await createRefResp.text();
       throw new Error(`创建分支失败：${createRefResp.status} ${createRefResp.statusText} ${txt}`);
     }
+  } else if (!checkBranch.ok) {
+    const txt = await checkBranch.text();
+    throw new Error(`检查分支失败：${checkBranch.status} ${checkBranch.statusText} ${txt}`);
   } // else 分支已存在，直接使用
 
   // 4. 在指定分支上创建文件（PUT /repos/{owner}/{repo}/contents/{path}）
-  const putResp = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(filePath)}`, {
+  const normalizedFilePath = filePath
+    .split('/')
+    .filter(Boolean)
+    .map(segment => encodeURIComponent(segment))
+    .join('/');
+
+  const putResp = await fetch(`https://api.github.com/repos/${repo}/contents/${normalizedFilePath}`, {
     method: 'PUT',
     headers: { ...headers, 'Content-Type': 'application/json' },
     body: JSON.stringify({
