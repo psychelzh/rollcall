@@ -11,8 +11,10 @@
 <body>
   <div class="app">
     <header>
-
-      <h1>点名器</h1>
+      <div class="page-title">
+        <h1>点名器</h1>
+        <div class="page-subtitle">随机点名工具</div>
+      </div>
       <div style="display:flex;align-items:center;gap:10px">
         <a href="https://github.com/psychelzh/rollcall" target="_blank"
           style="color: var(--text); text-decoration: none; display: flex; align-items: center;"><svg height="20"
@@ -30,7 +32,7 @@
       <div class="col">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center">
-            <strong id="namesInputTitle" title="名单输入（每行一个姓名）"
+            <strong id="namesInputTitle" class="section-title" title="名单输入（每行一个姓名）"
               style="margin-bottom: 12px; display: block;"><span aria-hidden="true">🧾 </span><span id="namesInputTitleText">名单输入（每行一个姓名）</span></strong>
             <div class="muted">可粘贴 / 编辑 / 导入</div>
           </div>
@@ -64,7 +66,7 @@
 
       <div class="col" style="flex:0.6">
         <div class="card">
-          <div class="flex-between"><strong>📋 已点名单</strong>
+          <div class="flex-between"><strong class="section-title">📋 已点名单</strong>
             <div style="display:flex;gap:8px">
               <button id="copyCalled" class="small ghost">复制</button>
               <button id="exportCalled" class="small">导出</button>
@@ -76,7 +78,7 @@
         </div>
 
         <div class="card" style="margin-top:12px">
-          <div class="flex-between"><strong>💾 保存说明</strong>
+          <div class="flex-between"><strong class="section-title">💾 保存说明</strong>
           </div>
           <div class="save-tip" role="note" aria-label="保存说明">
             <div class="save-tip-text">已点名单与原始名单会自动保存在当前浏览器；跨设备使用时可导出同步，或使用“创建 PR”功能。</div>

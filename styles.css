@@ -40,13 +40,36 @@ body {
 
 header {
   display: flex;
-  align-items: center;
-  justify-content: space-between
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08)
 }
 
 h1 {
   margin: 0;
-  font-size: 18px
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  line-height: 1.1
+}
+
+.page-title {
+  display: flex;
+  flex-direction: column
+}
+
+.page-subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted)
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px
 }
 
 .row {
@@ -220,6 +243,10 @@ footer {
 
   .name-display {
     font-size: 26px
+  }
+
+  h1 {
+    font-size: 24px
   }
 }
 
