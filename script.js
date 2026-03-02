@@ -392,10 +392,25 @@ function updateMarkBtnState() {
   markBtn.classList.toggle('ghost', !hasSelection);
 }
 
+function cleanupNamesInputEmptyLines() {
+  const raw = namesInput.value;
+  const cleaned = raw
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .join('\n');
+
+  if (cleaned !== raw) {
+    namesInput.value = cleaned;
+    namesInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
 // 监听输入框的选中和光标变化
 namesInput.addEventListener('select', updateMarkBtnState);
 namesInput.addEventListener('click', updateMarkBtnState);
 namesInput.addEventListener('keyup', updateMarkBtnState);
+namesInput.addEventListener('blur', cleanupNamesInputEmptyLines);
 
 // 监听输入框内容变化，只在文本框完全清空且不是滚动点名过程中更新数据
 namesInput.addEventListener('input', () => {
