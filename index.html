@@ -31,7 +31,7 @@
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <strong id="namesInputTitle" title="名单输入（每行一个姓名）"
-              style="margin-bottom: 12px; display: block;">名单输入（每行一个姓名）</strong>
+              style="margin-bottom: 12px; display: block;"><span aria-hidden="true">🧾 </span><span id="namesInputTitleText">名单输入（每行一个姓名）</span></strong>
             <div class="muted">可粘贴 / 编辑 / 导入</div>
           </div>
           <textarea id="namesInput" placeholder="示例：
@@ -64,7 +64,7 @@
 
       <div class="col" style="flex:0.6">
         <div class="card">
-          <div class="flex-between"><strong>已点名单</strong>
+          <div class="flex-between"><strong>📋 已点名单</strong>
             <div style="display:flex;gap:8px">
               <button id="copyCalled" class="small ghost">复制</button>
               <button id="exportCalled" class="small">导出</button>
@@ -76,12 +76,10 @@
         </div>
 
         <div class="card" style="margin-top:12px">
-          <div class="flex-between"><strong>操作记录 / 保存</strong>
-            <div class="muted">自动保存在浏览器</div>
+          <div class="flex-between"><strong>💾 保存说明</strong>
           </div>
-          <div style="margin-top:8px;color:var(--muted);font-size:13px">
-            • 页面会在本地（<code>localStorage</code>）中保存已点名单与原始名单；可在不同会话中继续使用。<br>
-            • 若需跨设备保存，请导出已点名单后手动同步文件，或者使用“创建 PR”功能。
+          <div class="save-tip" role="note" aria-label="保存说明">
+            <div class="save-tip-text">已点名单与原始名单会自动保存在当前浏览器；跨设备使用时可导出同步，或使用“创建 PR”功能。</div>
           </div>
         </div>
       </div>
@@ -89,7 +87,6 @@
 
   </div>
 
-  <!-- GitHub 导入 Modal（原有） -->
   <div id="githubModal" class="modal">
     <div class="modal-content">
       <button class="modal-close" id="closeModal">×</button>
@@ -102,7 +99,6 @@
     </div>
   </div>
 
-  <!-- 新增：创建 PR Modal -->
   <div id="githubPRModal" class="modal">
     <div class="modal-content">
       <button class="modal-close" id="closePRModal">×</button>

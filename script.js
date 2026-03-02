@@ -33,13 +33,15 @@ initTheme();
 function updateNamesInputTitle(filename) {
   const nameWithoutExt = filename.replace(/\.csv$/, '');
   const truncated = nameWithoutExt.length > 15 ? nameWithoutExt.substring(0, 15) + '...' : nameWithoutExt;
-  namesInputTitle.textContent = truncated;
+  const titleTextTarget = namesInputTitleText || namesInputTitle;
+  titleTextTarget.textContent = truncated;
   namesInputTitle.title = nameWithoutExt;
 }
 
 function resetNamesInputTitle() {
   const defaultText = '名单输入（每行一个姓名）';
-  namesInputTitle.textContent = defaultText;
+  const titleTextTarget = namesInputTitleText || namesInputTitle;
+  titleTextTarget.textContent = defaultText;
   namesInputTitle.title = defaultText;
 }
 const namesInput = document.getElementById('namesInput');
@@ -55,6 +57,7 @@ const copyCalled = document.getElementById('copyCalled');
 const exportCalled = document.getElementById('exportCalled');
 const clearCalled = document.getElementById('clearCalled');
 const namesInputTitle = document.getElementById('namesInputTitle');
+const namesInputTitleText = document.getElementById('namesInputTitleText');
 
 // 新增：Create PR 按钮与模态元素
 const createPRBtn = document.getElementById('createPR');
