@@ -138,6 +138,11 @@ function loadFromStorage() {
     allNames = rawAll ? JSON.parse(rawAll) : [];
     calledNames = rawCalled ? JSON.parse(rawCalled) : [];
     currentListName = rawListName ? normalizeListName(rawListName) : '';
+    if (currentListName) {
+      updateNamesInputTitle(currentListName);
+    } else {
+      resetNamesInputTitle();
+    }
     renderCalledList();
     updateCounts();
     namesInput.value = allNames.join('\n');
