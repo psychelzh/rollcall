@@ -49,6 +49,7 @@ const shuffleBtn = document.getElementById('shuffle');
 const clearAllBtn = document.getElementById('clearAll');
 const totalCount = document.getElementById('totalCount');
 const remainingCount = document.getElementById('remainingCount');
+const calledCount = document.getElementById('calledCount');
 const nameDisplay = document.getElementById('nameDisplay');
 const toggleRollBtn = document.getElementById('toggleRollBtn');
 const markBtn = document.getElementById('markBtn');
@@ -180,6 +181,7 @@ function parseInput() {
 function updateCounts() {
   totalCount.textContent = '总数: ' + (allNames.length + calledNames.length);
   remainingCount.textContent = '剩余: ' + (allNames.length);
+  calledCount.textContent = '已点 ' + calledNames.length + ' 人';
 }
 
 // 更新UI状态函数
@@ -250,14 +252,33 @@ function updateUIState(updateDisplay = true) {
 
 function renderCalledList() {
   const fragment = document.createDocumentFragment();
+
+  if (calledNames.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'called-empty';
+    empty.textContent = '还没有已点名单';
+    fragment.appendChild(empty);
+    calledListEl.innerHTML = '';
+    calledListEl.appendChild(fragment);
+    return;
+  }
+
   calledNames.forEach((name, idx) => {
     const div = document.createElement('div');
     div.className = 'called-item';
     div.dataset.idx = idx;
     const left = document.createElement('div');
-    left.textContent = name;
+    left.className = 'called-person';
+    const order = document.createElement('span');
+    order.className = 'called-order';
+    order.textContent = String(idx + 1);
+    const nameText = document.createElement('span');
+    nameText.className = 'called-name';
+    nameText.textContent = name;
+    left.appendChild(order);
+    left.appendChild(nameText);
     const right = document.createElement('div');
-    right.style.display = 'flex'; right.style.gap = '8px';
+    right.className = 'called-item-actions';
     const rm = document.createElement('button'); rm.textContent = '移除'; rm.className = 'small ghost';
     rm.dataset.action = 'remove';
     right.appendChild(rm);
