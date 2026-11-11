@@ -4,136 +4,278 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>点名器</title>
+  <title>点名器 · 课堂随机点名</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+  <!-- 统一描边图标集：全站仅此一套，内联、无外部依赖 -->
+  <svg class="svg-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-grid" viewBox="0 0 24 24">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </symbol>
+    <symbol id="i-star" viewBox="0 0 24 24">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    </symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="4.2" />
+      <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </symbol>
+    <symbol id="i-github" viewBox="0 0 24 24">
+      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+    </symbol>
+    <symbol id="i-list" viewBox="0 0 24 24">
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+    </symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24">
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+    </symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+    </symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24">
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="6" cy="19" r="2" />
+      <circle cx="18" cy="7" r="2" />
+      <path d="M6 7v10M18 9a5 5 0 0 1-5 5H9" />
+    </symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24">
+      <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24">
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24">
+      <path d="M20 6L9 17l-5-5" />
+    </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v5M12 17h.01" />
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24">
+      <path d="M6 9l6 6 6-6" />
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24">
+      <path d="M18 6L6 18M6 6l12 12" />
+    </symbol>
+    <symbol id="i-file" viewBox="0 0 24 24">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </symbol>
+  </svg>
+
   <div class="app">
     <header>
       <div class="page-title">
         <h1>点名器</h1>
-        <div class="page-subtitle">随机点名工具</div>
+        <div class="page-subtitle">课堂随机点名 · 经典 / 星空双模式</div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <a href="https://github.com/psychelzh/rollcall" target="_blank"
-          style="color: var(--text); text-decoration: none; display: flex; align-items: center;"><svg height="20"
-            viewBox="0 0 16 16" width="20" fill="currentColor">
-            <path
-              d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
-            </path>
-          </svg></a>
-        <button id="themeToggle" class="theme-toggle" title="切换白天/夜间主题" aria-label="切换主题"
-          style="display: flex; align-items: center; justify-content: center; height: 20px; padding: 0 6px;">🌙</button>
+      <div class="header-actions">
+        <div class="mode-switch" role="group" aria-label="视图模式">
+          <button id="modeClassic" class="mode-btn is-active" aria-pressed="true" type="button">
+            <svg class="icon"><use href="#i-grid" /></svg>经典
+          </button>
+          <button id="modeStar" class="mode-btn" aria-pressed="false" type="button">
+            <svg class="icon"><use href="#i-star" /></svg>星空
+          </button>
+        </div>
+        <a class="icon-btn" href="https://github.com/psychelzh/rollcall" target="_blank" rel="noopener"
+          aria-label="项目仓库"><svg class="icon"><use href="#i-github" /></svg></a>
+        <button id="themeToggle" class="icon-btn" type="button" aria-label="切换白天/夜间主题" title="切换主题">
+          <svg class="icon" id="themeIcon"><use href="#i-moon" /></svg>
+        </button>
       </div>
     </header>
 
-    <div class="row" style="margin-top:18px">
-      <div class="col">
-        <div class="card">
+    <div class="row">
+      <div class="col main-col">
+        <section class="card list-card" id="listCard">
           <div class="section-header">
-            <strong id="namesInputTitle" class="section-title" title="名单输入（每行一个姓名）"><span
-                aria-hidden="true">🧾 </span><span id="namesInputTitleText">名单输入（每行一个姓名）</span></strong>
-            <div class="muted">可粘贴 / 编辑 / 导入</div>
+            <strong id="namesInputTitle" class="section-title">
+              <svg class="icon"><use href="#i-list" /></svg><span id="namesInputTitleText">名单输入</span>
+            </strong>
+            <div class="list-card-head">
+              <span class="muted" id="namesHint">可粘贴 / 编辑 / 拖入文件</span>
+              <button id="toggleListCard" class="collapse-btn" type="button" aria-expanded="true"
+                aria-controls="listBody" title="收起名单区，给星图腾空间">
+                <svg class="icon"><use href="#i-chevron" /></svg>
+              </button>
+            </div>
           </div>
-          <textarea id="namesInput" placeholder="示例：
-候选01
-候选02
-候选03"></textarea>
+
+          <div id="listSummary" class="list-summary" hidden></div>
+
+          <div class="list-body" id="listBody">
+          <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="拖入或选择名单文件">
+            <svg class="icon drop-icon"><use href="#i-upload" /></svg>
+            <div class="drop-zone-text">
+              <div class="drop-zone-main">拖入名单文件，或点击选择</div>
+              <div class="drop-zone-sub">支持 .txt / .csv / .tsv，可一次选多份；有班级列或分文件时自动分星区</div>
+            </div>
+            <input type="file" id="fileInput" accept=".txt,.csv,.tsv,text/plain,text/csv" multiple hidden>
+          </div>
+
+          <label class="sr-only" for="namesInput">名单文本，每行一个姓名</label>
+          <textarea id="namesInput" spellcheck="false" placeholder="每行一个姓名，也可粘贴逗号分隔的名单"></textarea>
+
           <div class="controls">
-            <button id="importFromGitHub" style="background:#8b5cf6;color:white">从 GitHub 导入</button>
-            <button id="shuffle" class="ghost">打乱顺序</button>
-            <button id="clearAll" class="ghost" style="background:#dc2626;color:white">清空名单</button>
+            <button id="importFromGitHub" class="ghost small" type="button">从 GitHub 导入</button>
+            <button id="shuffle" class="ghost" type="button">打乱顺序</button>
+            <button id="clearAll" class="ghost danger" type="button">清空名单</button>
             <div class="count-group">
               <div class="kbd" id="totalCount">总数: 0</div>
               <div class="kbd" id="remainingCount">剩余: 0</div>
             </div>
           </div>
-        </div>
-
-        <div class="card roll-card">
-          <div class="viewer">
-            <div id="nameDisplay" class="name-display muted">点击"开始滚动"开始</div>
-
-            <div class="roll-actions">
-              <button id="toggleRollBtn" class="big">开始滚动</button>
-              <button id="markBtn" class="big ghost">手动标记</button>
-            </div>
           </div>
-        </div>
+        </section>
 
+        <section class="card roll-card">
+          <div class="viewer" id="classicView">
+            <div id="nameDisplay" class="name-display muted">点击"开始滚动"开始</div>
+          </div>
+
+          <div class="star-view" id="starView" hidden>
+            <canvas id="starCanvas" aria-label="星空点名视图，点击未点亮的星可手动标记"></canvas>
+            <div class="star-overlay">
+              <div id="starGroupName" class="star-group-name"></div>
+              <div id="starName" class="star-name"></div>
+              <div id="starProgress" class="star-progress"></div>
+            </div>
+            <div class="star-legend" id="starLegend"></div>
+            <div class="star-tip">点击未点亮的星可手动标记</div>
+          </div>
+
+          <div class="roll-actions">
+            <button id="toggleRollBtn" class="big" type="button">开始滚动</button>
+            <button id="markBtn" class="big ghost" type="button">手动标记</button>
+          </div>
+        </section>
       </div>
 
-      <div class="col" style="flex:0.6">
-        <div class="card called-card">
+      <div class="col side-col">
+        <section class="card called-card">
           <div class="called-panel-header">
             <div class="called-heading">
-              <strong class="section-title">📋 已点名单</strong>
+              <strong class="section-title"><svg class="icon"><use href="#i-clipboard" /></svg>已点名单</strong>
               <span id="calledCount" class="count-badge">已点 0 人</span>
             </div>
             <div class="called-actions">
-              <button id="copyCalled" class="small ghost">复制</button>
-              <button id="exportCalled" class="small">导出</button>
-              <button id="createPR" class="small">创建 PR</button>
-              <button id="clearCalled" class="small ghost">清除</button>
+              <button id="importCalled" class="small ghost" type="button" title="把导出的已点名单文件传回">传回</button>
+              <button id="copyCalled" class="small ghost" type="button">复制</button>
+              <button id="exportCalled" class="small" type="button">导出</button>
+              <button id="quickSync" class="small" type="button">同步</button>
+              <button id="clearCalled" class="small ghost danger" type="button">清除</button>
             </div>
           </div>
-          <div class="called-list" id="calledList"></div>
-          <div class="save-note" role="note" aria-label="保存说明">自动保存在当前浏览器；跨设备可导出同步，或使用“创建 PR”。</div>
-        </div>
+          <div class="called-list" id="calledList" aria-label="已点名单列表"></div>
+          <div id="calledDropHint" class="drop-hint">也可把已点名单文件拖到这里</div>
+          <div class="save-note">自动保存在当前浏览器；跨设备可导出后「传回」续点，或用「同步」提交到 GitHub。</div>
+          <input type="file" id="calledFileInput" accept=".txt,.csv,.tsv,text/plain,text/csv" hidden>
+        </section>
       </div>
     </div>
-
   </div>
 
-  <div id="githubModal" class="modal">
+  <!-- 名单导入预览 -->
+  <div id="importModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <div class="modal-content modal-wide">
+      <button class="modal-close icon-btn" id="closeImportModal" type="button" aria-label="关闭"><svg
+          class="icon"><use href="#i-x" /></svg></button>
+      <h3 id="importTitle">导入预览</h3>
+      <p class="modal-sub" id="importSource"></p>
+      <div id="importSummary" class="import-summary"></div>
+      <div id="importGroups" class="import-groups"></div>
+      <div id="importIssues" class="import-issues"></div>
+      <div id="importPreview" class="import-preview"></div>
+      <div class="import-options">
+        <label class="radio-row"><input type="radio" name="importMode" value="append" checked><span>追加到现有名单（保留已点进度）</span></label>
+        <label class="radio-row"><input type="radio" name="importMode" value="replace"><span>替换现有名单</span></label>
+        <label class="check-row" id="resetCalledRow" hidden><input type="checkbox" id="resetCalled"><span>同时清除已点记录</span></label>
+      </div>
+      <div class="modal-actions">
+        <button id="cancelImport" class="ghost" type="button">取消</button>
+        <button id="confirmImport" type="button">确认导入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 已点名单传回预览 -->
+  <div id="calledImportModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="calledImportTitle">
+    <div class="modal-content modal-wide">
+      <button class="modal-close icon-btn" id="closeCalledImportModal" type="button" aria-label="关闭"><svg
+          class="icon"><use href="#i-x" /></svg></button>
+      <h3 id="calledImportTitle">传回已点名单</h3>
+      <p class="modal-sub" id="calledImportSource"></p>
+      <div id="calledImportSummary" class="import-summary"></div>
+      <div id="calledImportPreview" class="import-preview"></div>
+      <div class="modal-actions">
+        <button id="cancelCalledImport" class="ghost" type="button">取消</button>
+        <button id="confirmCalledImport" type="button">确认合并</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 从 GitHub 导入名单（保留原有能力） -->
+  <div id="githubModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="githubTitle">
     <div class="modal-content">
-      <button class="modal-close" id="closeModal">×</button>
-      <h3>从 GitHub 导入名单</h3>
-      <input type="text" id="githubRepo" placeholder="输入 GitHub 仓库地址（如：owner/repo）"
-        style="width:100%;padding:8px;margin-bottom:10px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
-      <button id="fetchCSV" style="width:100%;padding:8px;background:var(--accent);color:var(--card);border:none;">获取
-        CSV 文件</button>
-      <div id="csvFiles" style="margin-top:10px;"></div>
+      <button class="modal-close icon-btn" id="closeModal" type="button" aria-label="关闭"><svg
+          class="icon"><use href="#i-x" /></svg></button>
+      <h3 id="githubTitle">从 GitHub 导入名单</h3>
+      <label class="field-label" for="githubRepo">仓库（owner/repo）</label>
+      <input type="text" id="githubRepo" class="field" placeholder="例如：psychelzh/rollcall">
+      <button id="fetchCSV" class="btn-block" type="button">获取 CSV 文件</button>
+      <div id="csvFiles" class="csv-files"></div>
     </div>
   </div>
 
-  <div id="githubPRModal" class="modal">
+  <!-- 同步已点名单到 GitHub（原「创建 PR」简化版） -->
+  <div id="syncModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="syncTitle">
     <div class="modal-content">
-      <button class="modal-close" id="closePRModal">×</button>
-      <h3>将已点名单创建为 Pull Request</h3>
-
-      <label style="font-size:13px;color:var(--muted)">目标仓库（owner/repo）</label>
-      <input type="text" id="prRepo" placeholder="例如：yourname/yourrepo"
-        style="width:100%;padding:8px;margin-bottom:8px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
-
-      <label style="font-size:13px;color:var(--muted)">文件路径（仓库内保存路径）</label>
-      <input type="text" id="prFilePath" placeholder="例如：rollcall/called_names_YYYYMMDD.txt"
-        style="width:100%;padding:8px;margin-bottom:8px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
-
-      <label style="font-size:13px;color:var(--muted)">PR 标题</label>
-      <input type="text" id="prTitle" placeholder="例如：Add called names (2025-09-15)"
-        style="width:100%;padding:8px;margin-bottom:8px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
-
-      <label style="font-size:13px;color:var(--muted)">可选分支名（若留空，自动生成）</label>
-      <input type="text" id="prBranch" placeholder="例如：rollcall/called-names-20250915"
-        style="width:100%;padding:8px;margin-bottom:8px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
-
-      <label style="font-size:13px;color:var(--muted)">GitHub 个人访问令牌（PAT）</label>
-      <input type="password" id="prToken" placeholder="输入 PAT（仅在本次会话内使用，不会保存）"
-        style="width:100%;padding:8px;margin-bottom:10px;background:var(--card);color:var(--text);border:1px solid var(--muted);">
-
-      <div style="display:flex;gap:8px">
-        <button id="submitPR" style="flex:1;padding:10px;background:#10b981;color:white;border:none">创建 PR</button>
-        <button id="cancelPR" class="small ghost" style="flex:1">取消</button>
+      <button class="modal-close icon-btn" id="closeSyncModal" type="button" aria-label="关闭"><svg
+          class="icon"><use href="#i-x" /></svg></button>
+      <h3 id="syncTitle">同步已点名单到 GitHub</h3>
+      <p class="modal-sub">只需填仓库和令牌，其余自动填好。</p>
+      <label class="field-label" for="syncRepo">仓库（owner/repo，会记住）</label>
+      <input type="text" id="syncRepo" class="field" placeholder="例如：yourname/yourrepo">
+      <label class="field-label" for="syncToken">GitHub 个人访问令牌 PAT</label>
+      <input type="password" id="syncToken" class="field" placeholder="仅保存在当前标签页会话，关闭即失效">
+      <button id="toggleAdvanced" class="advanced-toggle" type="button" aria-expanded="false">
+        <svg class="icon"><use href="#i-chevron" /></svg>高级设置（文件路径 / 标题 / 分支）
+      </button>
+      <div id="advancedFields" class="advanced-fields" hidden>
+        <label class="field-label" for="syncPath">文件路径</label>
+        <input type="text" id="syncPath" class="field">
+        <label class="field-label" for="syncTitleInput">PR 标题</label>
+        <input type="text" id="syncTitleInput" class="field">
+        <label class="field-label" for="syncBranch">分支名</label>
+        <input type="text" id="syncBranch" class="field">
       </div>
-
-      <div id="prStatus" style="margin-top:10px;color:var(--muted);font-size:13px"></div>
-      <div style="margin-top:8px;color:var(--muted);font-size:12px">
-        <strong>安全说明：</strong>PAT 仅在内存中使用，不会保存在 localStorage。若提交到私有仓库，PAT 需具备 <code>repo</code> 权限；提交到公开仓库，PAT 需具备 <code>public_repo</code> 权限。
+      <div class="modal-actions">
+        <button id="cancelSync" class="ghost" type="button">取消</button>
+        <button id="submitSync" type="button">一键同步</button>
       </div>
+      <div id="syncStatus" class="sync-status" role="status"></div>
+      <div class="security-note">PAT 只存在当前标签页的会话存储中，不会写入 localStorage。私有仓库需 <code>repo</code>
+        权限，公开仓库需 <code>public_repo</code> 权限。</div>
     </div>
   </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="script.js"></script>
 </body>
