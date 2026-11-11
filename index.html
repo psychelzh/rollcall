@@ -11,15 +11,6 @@
 <body>
   <!-- 统一描边图标集：全站仅此一套，内联、无外部依赖 -->
   <svg class="svg-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-    <symbol id="i-grid" viewBox="0 0 24 24">
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1.5" />
-    </symbol>
-    <symbol id="i-star" viewBox="0 0 24 24">
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-    </symbol>
     <symbol id="i-moon" viewBox="0 0 24 24">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
     </symbol>
@@ -82,17 +73,13 @@
     <header>
       <div class="page-title">
         <h1>点名器</h1>
-        <div class="page-subtitle">课堂随机点名 · 经典 / 星空双模式</div>
+        <div class="page-subtitle">课堂随机点名 · 星空版</div>
       </div>
       <div class="header-actions">
-        <div class="mode-switch" role="group" aria-label="视图模式">
-          <button id="modeClassic" class="mode-btn is-active" aria-pressed="true" type="button">
-            <svg class="icon"><use href="#i-grid" /></svg>经典
-          </button>
-          <button id="modeStar" class="mode-btn" aria-pressed="false" type="button">
-            <svg class="icon"><use href="#i-star" /></svg>星空
-          </button>
-        </div>
+        <button id="calledPanelBtn" class="icon-btn" type="button" aria-label="查看已点名单" title="已点名单"
+          aria-haspopup="dialog" aria-expanded="false" aria-controls="calledDrawer">
+          <svg class="icon"><use href="#i-clipboard" /></svg>
+        </button>
         <a class="icon-btn" href="https://github.com/psychelzh/rollcall" target="_blank" rel="noopener"
           aria-label="项目仓库"><svg class="icon"><use href="#i-github" /></svg></a>
         <button id="themeToggle" class="icon-btn" type="button" aria-label="切换白天/夜间主题" title="切换主题">
@@ -145,11 +132,7 @@
         </section>
 
         <section class="card roll-card">
-          <div class="viewer" id="classicView">
-            <div id="nameDisplay" class="name-display muted">点击"开始滚动"开始</div>
-          </div>
-
-          <div class="star-view" id="starView" hidden>
+          <div class="star-view" id="starView">
             <canvas id="starCanvas" aria-label="星空点名视图，点击未点亮的星可手动标记"></canvas>
             <div class="star-overlay">
               <div id="starGroupName" class="star-group-name"></div>
@@ -166,30 +149,33 @@
           </div>
         </section>
       </div>
-
-      <div class="col side-col">
-        <section class="card called-card">
-          <div class="called-panel-header">
-            <div class="called-heading">
-              <strong class="section-title"><svg class="icon"><use href="#i-clipboard" /></svg>已点名单</strong>
-              <span id="calledCount" class="count-badge">已点 0 人</span>
-            </div>
-            <div class="called-actions">
-              <button id="importCalled" class="small ghost" type="button" title="把导出的已点名单文件传回">传回</button>
-              <button id="copyCalled" class="small ghost" type="button">复制</button>
-              <button id="exportCalled" class="small" type="button">导出</button>
-              <button id="quickSync" class="small" type="button">同步</button>
-              <button id="clearCalled" class="small ghost danger" type="button">清除</button>
-            </div>
-          </div>
-          <div class="called-list" id="calledList" aria-label="已点名单列表"></div>
-          <div id="calledDropHint" class="drop-hint">也可把已点名单文件拖到这里</div>
-          <div class="save-note">自动保存在当前浏览器；跨设备可导出后「传回」续点，或用「同步」提交到 GitHub。</div>
-          <input type="file" id="calledFileInput" accept=".txt,.csv,.tsv,text/plain,text/csv" hidden>
-        </section>
-      </div>
     </div>
   </div>
+
+  <!-- 已点名单抽屉：右侧滑出，替代原右侧栏 -->
+  <aside id="calledDrawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="calledDrawerTitle">
+    <div class="drawer-panel">
+      <div class="drawer-head">
+        <div class="called-heading">
+          <strong class="section-title" id="calledDrawerTitle"><svg class="icon"><use href="#i-clipboard" /></svg>已点名单</strong>
+          <span id="calledCount" class="count-badge">已点 0 人</span>
+        </div>
+        <button class="icon-btn" id="closeCalledDrawer" type="button" aria-label="关闭已点名单"><svg
+            class="icon"><use href="#i-x" /></svg></button>
+      </div>
+      <div class="called-actions">
+        <button id="importCalled" class="small ghost" type="button" title="把导出的已点名单文件传回">传回</button>
+        <button id="copyCalled" class="small ghost" type="button">复制</button>
+        <button id="exportCalled" class="small" type="button">导出</button>
+        <button id="quickSync" class="small" type="button">同步</button>
+        <button id="clearCalled" class="small ghost danger" type="button">清除</button>
+      </div>
+      <div class="called-list" id="calledList" aria-label="已点名单列表"></div>
+      <div id="calledDropHint" class="drop-hint">也可把已点名单文件拖到这里</div>
+      <div class="save-note">自动保存在当前浏览器；跨设备可导出后「传回」续点，或用「同步」提交到 GitHub。</div>
+      <input type="file" id="calledFileInput" accept=".txt,.csv,.tsv,text/plain,text/csv" hidden>
+    </div>
+  </aside>
 
   <!-- 名单导入预览 -->
   <div id="importModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">

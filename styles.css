@@ -56,6 +56,9 @@
    ============================================================ */
 * { box-sizing: border-box; }
 
+/* 显式隐藏兜底：任何 display 覆盖都不能顶掉 hidden 属性 */
+[hidden] { display: none !important; }
+
 .svg-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 .icon {
@@ -129,31 +132,6 @@ h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
 .page-subtitle { margin-top: 6px; font-size: 13px; color: var(--muted); }
 .header-actions { display: flex; align-items: center; gap: 10px; }
 
-.mode-switch {
-  display: flex;
-  padding: 3px;
-  gap: 2px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-2);
-}
-
-.mode-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.mode-btn .icon { width: 16px; height: 16px; flex-basis: 16px; }
-.mode-btn.is-active { background: var(--accent); color: var(--accent-contrast); }
-
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -174,11 +152,6 @@ h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
 .row { display: flex; align-items: stretch; flex: 1; gap: 18px; min-height: 0; margin-top: 14px; }
 .col { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .main-col { flex: 1; }
-.side-col { flex: 0.6; }
-
-/* 星空模式：不用右侧栏，星图占满整行，已点学生直接标注在星图上 */
-.app.is-star .side-col { display: none; }
-.app.is-star .row { gap: 0; }
 
 /* 名单区可收起：星空模式自动收成一行摘要 */
 .list-card { flex: 0 0 auto; }
@@ -306,33 +279,9 @@ button.small { font-size: 13px; padding: 6px 9px; white-space: nowrap; }
 }
 
 /* ============================================================
-   点名区：经典视图 / 星空视图共用底部操作条
+   点名区：星空舞台独占，底部操作条
    ============================================================ */
 .roll-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-
-.viewer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  min-height: 180px;
-  padding: 16px;
-  border-radius: var(--radius);
-  background: linear-gradient(180deg, var(--surface-2), transparent);
-}
-
-.name-display {
-  max-width: 100%;
-  font-size: 36px;
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
-  overflow-wrap: anywhere;
-  transition: filter 160ms linear, transform 160ms linear, opacity 160ms linear;
-}
-
-.blur { filter: blur(6px) saturate(1.05) contrast(1.02); transform: scale(1.02); opacity: 0.9; }
 
 .roll-actions { display: flex; gap: 10px; justify-content: center; margin-top: 12px; flex: 0 0 auto; }
 
@@ -347,7 +296,6 @@ button.small { font-size: 13px; padding: 6px 9px; white-space: nowrap; }
   background: linear-gradient(180deg, var(--star-bg-top), var(--star-bg-bottom));
 }
 
-.viewer[hidden], .star-view[hidden] { display: none; }
 #starCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 .star-overlay {
@@ -424,13 +372,43 @@ button.small { font-size: 13px; padding: 6px 9px; white-space: nowrap; }
 }
 
 /* ============================================================
-   已点名单
+   已点名单：右侧滑出抽屉（替代原右侧栏）
    ============================================================ */
-.called-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.called-panel-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.drawer {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 900;
+  justify-content: flex-end;
+}
+
+.drawer.is-open { display: flex; }
+
+.drawer-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 92vw);
+  height: 100%;
+  padding: 16px;
+  background: var(--card);
+  color: var(--text);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.drawer.is-open .drawer-panel { animation: drawer-in 220ms ease-out; }
+
+@keyframes drawer-in {
+  from { transform: translateX(28px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+.drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .called-heading { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .called-heading .icon { width: 18px; height: 18px; flex-basis: 18px; }
-.called-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.called-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
 
 .called-list {
   flex: 1;
@@ -625,19 +603,14 @@ code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
   body { display: block; height: auto; min-height: 100%; overflow-y: auto; }
   .app { width: 100%; height: auto; min-height: 100vh; max-height: none; margin: 0; border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
   .row { flex-direction: column; gap: 14px; }
-  .side-col { flex: 1; }
-  .app.is-star .side-col { display: none; }
-  .section-header, .called-panel-header { align-items: flex-start; flex-direction: column; }
+  .section-header { align-items: flex-start; flex-direction: column; }
   .list-card-head { width: 100%; justify-content: space-between; }
   .count-group { width: 100%; margin-left: 0; }
   .kbd { flex: 1; text-align: center; }
-  .viewer { min-height: 240px; }
   .star-view { min-height: 320px; }
-  .name-display { font-size: 28px; }
   h1 { font-size: 24px; }
   .called-actions { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .called-actions .small { width: 100%; padding-left: 3px; padding-right: 3px; }
-  .called-list { min-height: 180px; max-height: 300px; }
   .roll-actions { width: 100%; }
   .roll-actions .big { flex: 1; }
   .header-actions { flex-wrap: wrap; justify-content: flex-end; }
@@ -646,7 +619,7 @@ code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 @media (max-width: 520px) {
   .import-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .called-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .mode-btn { padding: 6px 9px; }
+  .drawer-panel { width: 100vw; border-left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

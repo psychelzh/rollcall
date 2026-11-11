@@ -1,7 +1,7 @@
 /* ==========================================================================
-   课堂随机点名器 —— 经典 / 星空双模式
+   课堂随机点名器 —— 星空版
    无外部依赖，直接打开 index.html 即可离线使用。
-   分层：状态与存储 → 名单解析 → 导入/预览 → 点名引擎 → 视图渲染 → 事件绑定
+   分层：状态与存储 → 名单解析 → 导入/预览 → 点名引擎 → 星空视图 → 事件绑定
    ========================================================================== */
 
 const $ = (id) => document.getElementById(id);
@@ -24,7 +24,6 @@ const state = {
   groups: [],          // 组名数组，有序；可为空/一项/多项
   groupOf: {},         // 姓名 -> 组名
   listName: '',
-  mode: 'classic',
   rolling: false,
   highlight: '',
   lastShown: '',
@@ -33,12 +32,13 @@ const state = {
 
 const el = {};
 [
-  'themeToggle', 'themeIcon', 'modeClassic', 'modeStar',
+  'themeToggle', 'themeIcon',
   'namesInputTitle', 'namesInputTitleText', 'namesInput', 'namesHint',
   'listCard', 'listBody', 'toggleListCard', 'listSummary',
   'dropZone', 'fileInput', 'shuffle', 'clearAll', 'totalCount', 'remainingCount',
-  'classicView', 'starView', 'starCanvas', 'starGroupName', 'starName', 'starProgress', 'starLegend',
-  'nameDisplay', 'toggleRollBtn', 'markBtn',
+  'starView', 'starCanvas', 'starGroupName', 'starName', 'starProgress', 'starLegend',
+  'toggleRollBtn', 'markBtn',
+  'calledPanelBtn', 'calledDrawer', 'closeCalledDrawer',
   'calledList', 'calledDropHint', 'calledCount', 'calledFileInput',
   'importCalled', 'copyCalled', 'exportCalled', 'quickSync', 'clearCalled',
   'importFromGitHub', 'githubModal', 'closeModal', 'githubRepo', 'fetchCSV', 'csvFiles',
@@ -73,6 +73,19 @@ function toast(msg) {
 
 function openModal(id) { el[id].classList.add('is-open'); }
 function closeModal(id) { el[id].classList.remove('is-open'); }
+
+/* 已点名单抽屉：开/关时同步头部按钮的 aria-expanded，焦点进出有来有回 */
+function openCalledPanel() {
+  el.calledDrawer.classList.add('is-open');
+  el.calledPanelBtn.setAttribute('aria-expanded', 'true');
+  el.closeCalledDrawer.focus();
+}
+
+function closeCalledPanel() {
+  el.calledDrawer.classList.remove('is-open');
+  el.calledPanelBtn.setAttribute('aria-expanded', 'false');
+  el.calledPanelBtn.focus();
+}
 
 function hashString(s) {
   let h = 2166136261 >>> 0;
@@ -156,8 +169,7 @@ function saveState() {
       calledNames: state.calledNames,
       groups: state.groups,
       groupOf: state.groupOf,
-      listName: state.listName,
-      mode: state.mode
+      listName: state.listName
     }));
   } catch (e) { console.warn('保存失败', e); }
 }
@@ -182,8 +194,7 @@ function loadState() {
       calledNames: called.filter((x) => typeof x === 'string' && x.trim()),
       groups: [group],
       groupOf: {},
-      listName,
-      mode: 'classic'
+      listName
     };
     unique([...raw.allNames, ...raw.calledNames]).forEach((n) => { raw.groupOf[n] = group; });
   }
@@ -193,7 +204,7 @@ function loadState() {
   state.groups = Array.isArray(raw.groups) ? raw.groups.filter((g) => typeof g === 'string' && g.trim()) : [];
   state.groupOf = (raw.groupOf && typeof raw.groupOf === 'object') ? raw.groupOf : {};
   state.listName = typeof raw.listName === 'string' ? raw.listName : '';
-  state.mode = raw.mode === 'star' ? 'star' : 'classic';
+  // 旧版本 v2 数据里可能带有 mode 字段（classic/star），星空版一律忽略
   ensureGroupCoverage();
 }
 
@@ -459,7 +470,7 @@ function confirmImport() {
   pendingImport = null;
   const finalGroups = state.groups.length;
   toast(`已导入 ${d.items.length} 人${finalGroups > 1 ? `，共 ${finalGroups} 个星区` : '，全班一片星空'}`);
-  if (state.mode === 'star') computeStarLayout();
+  computeStarLayout();
 }
 
 /* --------------------------------------------------------------------------
@@ -498,7 +509,7 @@ function confirmCalledImport() {
   closeModal('calledImportModal');
   pendingCalledImport = null;
   toast(`已传回 ${toAdd.length} 人，点名进度已续上`);
-  if (state.mode === 'star') computeStarLayout();
+  computeStarLayout();
 }
 
 /* --------------------------------------------------------------------------
@@ -581,7 +592,7 @@ function markName(name) {
   syncTextarea();
   renderAll({ keepResult: true });
   renderRollButtons();
-  if (state.mode === 'star') computeStarLayout();
+  computeStarLayout();
 }
 
 function renderRollButtons() {
@@ -610,7 +621,7 @@ function updateListSummary() {
   if (state.allNames.length) parts.push(`剩余 ${state.allNames.length} 人`);
   el.listSummary.innerHTML = parts.length
     ? parts.map((p) => `<span class="chip chip-muted">${esc(p)}</span>`).join('')
-    : '<span class="chip chip-muted">还没有名单，点右上角展开后导入</span>';
+    : '<span class="chip chip-muted">还没有名单，点右侧箭头展开后导入</span>';
 }
 
 /** 名单区收起/展开；收起后星图独占纵向空间 */
@@ -690,12 +701,6 @@ function renderCalledList() {
 }
 
 function showIdle() {
-  el.nameDisplay.classList.remove('blur');
-  let text;
-  if (!state.allNames.length) text = state.calledNames.length ? '所有学生已点名完毕' : '名单为空，请导入名单';
-  else text = '点击"开始滚动"开始';
-  el.nameDisplay.textContent = text;
-  el.nameDisplay.classList.toggle('muted', !state.allNames.length);
   el.starName.textContent = state.allNames.length
     ? '等待点名'
     : (state.calledNames.length ? '全部已点亮' : '请先导入名单');
@@ -705,17 +710,12 @@ function showIdle() {
 }
 
 function showResult(name) {
-  el.nameDisplay.classList.remove('blur', 'muted');
-  el.nameDisplay.textContent = name;
   el.starName.textContent = name;
   el.starName.classList.remove('is-rolling', 'is-idle');
   el.starGroupName.textContent = state.groups.length > 1 ? (state.groupOf[name] || '') : '';
 }
 
 function showRolling(name) {
-  el.nameDisplay.classList.add('blur');
-  el.nameDisplay.classList.remove('muted');
-  el.nameDisplay.textContent = name;
   el.starName.classList.remove('is-idle');
   el.starName.classList.add('is-rolling');
   el.starName.textContent = name;
@@ -810,7 +810,7 @@ function manualMark() {
   syncTextarea();
   renderAll({ keepResult: true });
   toast(`已标记 ${valid.length} 人`);
-  if (state.mode === 'star') computeStarLayout();
+  computeStarLayout();
 }
 
 /* --------------------------------------------------------------------------
@@ -1056,33 +1056,6 @@ function startStarLoop() {
   if (!star.raf) star.raf = requestAnimationFrame(starLoop);
 }
 
-function stopStarLoop() {
-  if (star.raf) cancelAnimationFrame(star.raf);
-  star.raf = null;
-}
-
-function switchMode(mode) {
-  state.mode = mode === 'star' ? 'star' : 'classic';
-  const isStar = state.mode === 'star';
-  el.classicView.hidden = isStar;
-  el.starView.hidden = !isStar;
-  el.modeClassic.classList.toggle('is-active', !isStar);
-  el.modeStar.classList.toggle('is-active', isStar);
-  el.modeClassic.setAttribute('aria-pressed', String(!isStar));
-  el.modeStar.setAttribute('aria-pressed', String(isStar));
-  // 星空模式把名单区收成一行，星图独占纵向空间；切回经典自动展开
-  const app = el.listCard.closest('.app');
-  if (app) app.classList.toggle('is-star', isStar);
-  setListCollapsed(isStar);
-  saveState();
-  if (isStar) {
-    readStarTokens();
-    resizeStarCanvas();
-    startStarLoop();
-  } else stopStarLoop();
-  renderAll({ keepResult: state.calledNames.length > 0 });
-}
-
 /* --------------------------------------------------------------------------
    GitHub：导入名单 / 同步已点名单
    -------------------------------------------------------------------------- */
@@ -1223,13 +1196,20 @@ el.submitSync.addEventListener('click', async () => {
 /* --------------------------------------------------------------------------
    事件绑定
    -------------------------------------------------------------------------- */
-el.modeClassic.addEventListener('click', () => switchMode('classic'));
-el.modeStar.addEventListener('click', () => switchMode('star'));
+/* 已点名单抽屉：头部按钮开合、关闭按钮、点遮罩关闭 */
+el.calledPanelBtn.addEventListener('click', () => {
+  if (el.calledDrawer.classList.contains('is-open')) closeCalledPanel();
+  else openCalledPanel();
+});
+el.closeCalledDrawer.addEventListener('click', closeCalledPanel);
+el.calledDrawer.addEventListener('click', (e) => {
+  if (e.target === el.calledDrawer) closeCalledPanel();
+});
 
 // 名单区收起/展开：收起后星图立刻吃掉腾出来的空间
 el.toggleListCard.addEventListener('click', () => {
   setListCollapsed(el.toggleListCard.getAttribute('aria-expanded') === 'true');
-  if (state.mode === 'star') requestAnimationFrame(resizeStarCanvas);
+  requestAnimationFrame(resizeStarCanvas);
 });
 
 el.dropZone.addEventListener('click', () => el.fileInput.click());
@@ -1286,7 +1266,7 @@ el.namesInput.addEventListener('input', () => {
     ensureGroupCoverage();
     saveState();
     renderAll({ keepResult: false });
-    if (state.mode === 'star') computeStarLayout();
+    computeStarLayout();
   }, 180);
 });
 
@@ -1302,7 +1282,7 @@ el.calledList.addEventListener('click', (e) => {
   saveState();
   syncTextarea();
   renderAll({ keepResult: false });
-  if (state.mode === 'star') computeStarLayout();
+  computeStarLayout();
 });
 
 el.shuffle.addEventListener('click', () => {
@@ -1312,8 +1292,6 @@ el.shuffle.addEventListener('click', () => {
   }
   saveState();
   syncTextarea();
-  el.nameDisplay.textContent = '名单已打乱';
-  el.nameDisplay.classList.remove('muted');
   toast('名单已打乱');
 });
 
@@ -1325,7 +1303,7 @@ el.clearAll.addEventListener('click', () => {
   saveState();
   syncTextarea();
   renderAll({ keepResult: false });
-  if (state.mode === 'star') computeStarLayout();
+  computeStarLayout();
   toast('名单已清空');
 });
 
@@ -1338,7 +1316,7 @@ el.clearCalled.addEventListener('click', () => {
   saveState();
   syncTextarea();
   renderAll({ keepResult: false });
-  if (state.mode === 'star') computeStarLayout();
+  computeStarLayout();
   toast('已点名单已清除');
 });
 
@@ -1405,20 +1383,21 @@ document.querySelectorAll('input[name="importMode"]').forEach((r) => {
   });
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') document.querySelectorAll('.modal.is-open').forEach((m) => m.classList.remove('is-open'));
+  if (e.key !== 'Escape') return;
+  if (el.calledDrawer.classList.contains('is-open')) { closeCalledPanel(); return; }
+  document.querySelectorAll('.modal.is-open').forEach((m) => m.classList.remove('is-open'));
 });
 
 let resizeTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (state.mode === 'star') resizeStarCanvas(); }, 120);
+  resizeTimer = setTimeout(resizeStarCanvas, 120);
 });
 
-// 星图跟着容器走：收起名单、切换侧栏、窗口缩放都能自动重排
+// 星图跟着容器走：收起名单、窗口缩放都能自动重排
 if (window.ResizeObserver) {
   let roRaf = null;
   new ResizeObserver(() => {
-    if (state.mode !== 'star') return;
     cancelAnimationFrame(roRaf);
     roRaf = requestAnimationFrame(() => resizeStarCanvas());
   }).observe(el.starView);
@@ -1441,7 +1420,10 @@ function init() {
   syncTextarea();
   updateNamesTitle();
   star.ctx = el.starCanvas.getContext('2d');
-  switchMode(state.mode);
+  // 已有名单时把名单区收成一行，星图独占纵向空间；空名单保持展开方便导入
+  setListCollapsed(allStudents().length > 0);
+  resizeStarCanvas();
+  startStarLoop();
   renderRollButtons();
   renderAll({ keepResult: state.calledNames.length > 0 });
 }
