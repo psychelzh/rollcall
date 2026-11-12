@@ -24,6 +24,14 @@
     <symbol id="i-list" viewBox="0 0 24 24">
       <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
     </symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24">
+      <path d="M11 5L6 9H3v6h3l5 4V5z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+    </symbol>
+    <symbol id="i-volume-off" viewBox="0 0 24 24">
+      <path d="M11 5L6 9H3v6h3l5 4V5z" />
+      <path d="M16 9l5 6M21 9l-5 6" />
+    </symbol>
     <symbol id="i-clipboard" viewBox="0 0 24 24">
       <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
       <rect x="8" y="2" width="8" height="4" rx="1" />
@@ -76,9 +84,17 @@
         <div class="page-subtitle">课堂随机点名 · 星空版</div>
       </div>
       <div class="header-actions">
+        <button id="rosterBtn" class="icon-btn" type="button" aria-label="打开名单" title="名单"
+          aria-haspopup="dialog" aria-expanded="false" aria-controls="rosterDrawer">
+          <svg class="icon"><use href="#i-list" /></svg>
+        </button>
         <button id="calledPanelBtn" class="icon-btn" type="button" aria-label="查看已点名单" title="已点名单"
           aria-haspopup="dialog" aria-expanded="false" aria-controls="calledDrawer">
           <svg class="icon"><use href="#i-clipboard" /></svg>
+        </button>
+        <button id="soundToggle" class="icon-btn" type="button" aria-label="开启抽中提示音" aria-pressed="false"
+          title="抽中提示音（默认关闭）">
+          <svg class="icon"><use href="#i-volume-off" /></svg>
         </button>
         <a class="icon-btn" href="https://github.com/psychelzh/rollcall" target="_blank" rel="noopener"
           aria-label="项目仓库"><svg class="icon"><use href="#i-github" /></svg></a>
@@ -90,47 +106,6 @@
 
     <div class="row">
       <div class="col main-col">
-        <section class="card list-card" id="listCard">
-          <div class="section-header">
-            <strong id="namesInputTitle" class="section-title">
-              <svg class="icon"><use href="#i-list" /></svg><span id="namesInputTitleText">名单输入</span>
-            </strong>
-            <div class="list-card-head">
-              <span class="muted" id="namesHint">可粘贴 / 编辑 / 拖入文件</span>
-              <button id="toggleListCard" class="collapse-btn" type="button" aria-expanded="true"
-                aria-controls="listBody" title="收起名单区，给星图腾空间">
-                <svg class="icon"><use href="#i-chevron" /></svg>
-              </button>
-            </div>
-          </div>
-
-          <div id="listSummary" class="list-summary" hidden></div>
-
-          <div class="list-body" id="listBody">
-          <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="拖入或选择名单文件">
-            <svg class="icon drop-icon"><use href="#i-upload" /></svg>
-            <div class="drop-zone-text">
-              <div class="drop-zone-main">拖入名单文件，或点击选择</div>
-              <div class="drop-zone-sub">支持 .txt / .csv / .tsv，可一次选多份；有班级列或分文件时自动分星区</div>
-            </div>
-            <input type="file" id="fileInput" accept=".txt,.csv,.tsv,text/plain,text/csv" multiple hidden>
-          </div>
-
-          <label class="sr-only" for="namesInput">名单文本，每行一个姓名</label>
-          <textarea id="namesInput" spellcheck="false" placeholder="每行一个姓名，也可粘贴逗号分隔的名单"></textarea>
-
-          <div class="controls">
-            <button id="importFromGitHub" class="ghost small" type="button">从 GitHub 导入</button>
-            <button id="shuffle" class="ghost" type="button">打乱顺序</button>
-            <button id="clearAll" class="ghost danger" type="button">清空名单</button>
-            <div class="count-group">
-              <div class="kbd" id="totalCount">总数: 0</div>
-              <div class="kbd" id="remainingCount">剩余: 0</div>
-            </div>
-          </div>
-          </div>
-        </section>
-
         <section class="card roll-card">
           <div class="star-view" id="starView">
             <canvas id="starCanvas" aria-label="星空点名视图，点击未点亮的星可手动标记"></canvas>
@@ -140,17 +115,65 @@
               <div id="starProgress" class="star-progress"></div>
             </div>
             <div class="star-legend" id="starLegend"></div>
-            <div class="star-tip">点击未点亮的星可手动标记</div>
+            <div class="star-tip">点星可手动标记，也可在名单里标记</div>
           </div>
 
           <div class="roll-actions">
             <button id="toggleRollBtn" class="big" type="button">开始滚动</button>
-            <button id="markBtn" class="big ghost" type="button">手动标记</button>
           </div>
         </section>
       </div>
     </div>
   </div>
+
+  <!-- 名单抽屉：左侧滑出，与右侧已点名单对称；首屏完全不出现名单区 -->
+  <aside id="rosterDrawer" class="drawer drawer-left" role="dialog" aria-modal="true"
+    aria-labelledby="rosterDrawerTitle">
+    <div class="drawer-panel">
+      <div class="drawer-head">
+        <div class="called-heading">
+          <strong class="section-title" id="rosterDrawerTitle"><svg class="icon"><use href="#i-list" /></svg>名单</strong>
+          <span class="chip chip-muted" id="namesInputTitle" title="名单输入"><span
+              id="namesInputTitleText">名单输入</span></span>
+        </div>
+        <button class="icon-btn" id="closeRosterDrawer" type="button" aria-label="关闭名单"><svg
+            class="icon"><use href="#i-x" /></svg></button>
+      </div>
+
+      <div class="muted roster-hint" id="namesHint">可粘贴 / 编辑 / 拖入文件</div>
+
+      <div class="list-body" id="listBody">
+        <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="拖入或选择名单文件">
+          <svg class="icon drop-icon"><use href="#i-upload" /></svg>
+          <div class="drop-zone-text">
+            <div class="drop-zone-main">拖入名单文件，或点击选择</div>
+            <div class="drop-zone-sub">支持 .txt / .csv / .tsv，可一次选多份；有班级列或分文件时自动分星区</div>
+          </div>
+          <input type="file" id="fileInput" accept=".txt,.csv,.tsv,text/plain,text/csv" multiple hidden>
+        </div>
+
+        <label class="sr-only" for="namesInput">名单文本，每行一个姓名</label>
+        <textarea id="namesInput" spellcheck="false" placeholder="每行一个姓名，也可粘贴逗号分隔的名单"></textarea>
+
+        <div class="controls">
+          <button id="importFromGitHub" class="ghost small" type="button">从 GitHub 导入</button>
+          <button id="shuffle" class="ghost" type="button">打乱顺序</button>
+          <button id="clearAll" class="ghost danger" type="button">清空名单</button>
+          <div class="count-group">
+            <div class="kbd" id="totalCount">总数: 0</div>
+            <div class="kbd" id="remainingCount">剩余: 0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pending-head">
+        <strong class="section-title">待点名单</strong>
+        <span class="muted" id="pendingCount">待点 0 人</span>
+      </div>
+      <div class="pending-list" id="pendingList" aria-label="待点名单，可逐人标记"></div>
+      <div class="save-note">也可把名单文件直接拖到星图上；点击未点亮的星同样可以标记。</div>
+    </div>
+  </aside>
 
   <!-- 已点名单抽屉：右侧滑出，替代原右侧栏 -->
   <aside id="calledDrawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="calledDrawerTitle">

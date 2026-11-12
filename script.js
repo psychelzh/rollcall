@@ -8,6 +8,7 @@ const $ = (id) => document.getElementById(id);
 const unique = (arr) => Array.from(new Set(arr));
 const KEY_STATE = 'rollcall_state_v2';
 const KEY_THEME = 'rollcall_theme_v1';
+const KEY_SOUND = 'rollcall_sound_v1';
 const KEY_SYNC_REPO = 'rollcall_sync_repo_v1';
 const SESSION_TOKEN = 'rollcall_pat_session_v1';
 const LEGACY = {
@@ -32,12 +33,12 @@ const state = {
 
 const el = {};
 [
-  'themeToggle', 'themeIcon',
+  'themeToggle', 'themeIcon', 'soundToggle',
   'namesInputTitle', 'namesInputTitleText', 'namesInput', 'namesHint',
-  'listCard', 'listBody', 'toggleListCard', 'listSummary',
+  'rosterBtn', 'rosterDrawer', 'closeRosterDrawer', 'listBody', 'pendingList', 'pendingCount',
   'dropZone', 'fileInput', 'shuffle', 'clearAll', 'totalCount', 'remainingCount',
   'starView', 'starCanvas', 'starGroupName', 'starName', 'starProgress', 'starLegend',
-  'toggleRollBtn', 'markBtn',
+  'toggleRollBtn',
   'calledPanelBtn', 'calledDrawer', 'closeCalledDrawer',
   'calledList', 'calledDropHint', 'calledCount', 'calledFileInput',
   'importCalled', 'copyCalled', 'exportCalled', 'quickSync', 'clearCalled',
@@ -74,17 +75,33 @@ function toast(msg) {
 function openModal(id) { el[id].classList.add('is-open'); }
 function closeModal(id) { el[id].classList.remove('is-open'); }
 
-/* 已点名单抽屉：开/关时同步头部按钮的 aria-expanded，焦点进出有来有回 */
+/* 左右两个抽屉共用一套开合逻辑：互斥、aria-expanded 同步、焦点有来有回。
+   restoreFocus:false 只用于互斥切换，避免焦点被抢回刚关掉的那个按钮。 */
+function openRosterPanel() {
+  if (el.calledDrawer.classList.contains('is-open')) closeCalledPanel({ restoreFocus: false });
+  el.rosterDrawer.classList.add('is-open');
+  el.rosterBtn.setAttribute('aria-expanded', 'true');
+  renderPendingList();
+  el.closeRosterDrawer.focus();
+}
+
+function closeRosterPanel(opts = {}) {
+  el.rosterDrawer.classList.remove('is-open');
+  el.rosterBtn.setAttribute('aria-expanded', 'false');
+  if (opts.restoreFocus !== false) el.rosterBtn.focus();
+}
+
 function openCalledPanel() {
+  if (el.rosterDrawer.classList.contains('is-open')) closeRosterPanel({ restoreFocus: false });
   el.calledDrawer.classList.add('is-open');
   el.calledPanelBtn.setAttribute('aria-expanded', 'true');
   el.closeCalledDrawer.focus();
 }
 
-function closeCalledPanel() {
+function closeCalledPanel(opts = {}) {
   el.calledDrawer.classList.remove('is-open');
   el.calledPanelBtn.setAttribute('aria-expanded', 'false');
-  el.calledPanelBtn.focus();
+  if (opts.restoreFocus !== false) el.calledPanelBtn.focus();
 }
 
 function hashString(s) {
@@ -144,6 +161,70 @@ el.themeToggle.addEventListener('click', () => {
   try { localStorage.setItem(KEY_THEME, next); } catch (e) { /* ignore */ }
   readStarTokens();
 });
+
+/* --------------------------------------------------------------------------
+   轻音效（默认关闭）：Web Audio 合成，不引音频文件；AudioContext 只在用户手势里惰性创建
+   -------------------------------------------------------------------------- */
+let soundOn = false;
+let audioCtx = null;
+
+function syncSoundButton() {
+  el.soundToggle.setAttribute('aria-pressed', String(soundOn));
+  el.soundToggle.setAttribute('aria-label', soundOn ? '关闭抽中提示音' : '开启抽中提示音');
+  el.soundToggle.classList.toggle('is-on', soundOn);
+  const use = el.soundToggle.querySelector('use');
+  if (use) use.setAttribute('href', soundOn ? '#i-volume' : '#i-volume-off');
+}
+
+function ensureAudio() {
+  if (!soundOn || audioCtx) return;
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  if (!Ctor) return;
+  try { audioCtx = new Ctor(); } catch (e) { audioCtx = null; }
+}
+
+function initSound() {
+  try { soundOn = localStorage.getItem(KEY_SOUND) === '1'; } catch (e) { soundOn = false; }
+  syncSoundButton();
+}
+
+el.soundToggle.addEventListener('click', () => {
+  soundOn = !soundOn;
+  try { localStorage.setItem(KEY_SOUND, soundOn ? '1' : '0'); } catch (e) { /* 隐私模式 */ }
+  // 开关按钮本身就是用户手势，此刻创建/恢复上下文可绕过自动播放策略
+  if (soundOn) ensureAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  syncSoundButton();
+});
+
+/* 只在「抽中」这一刻响一声：正弦 + 三角波，≤200ms，峰值音量 0.045 */
+function playPickChime() {
+  if (!soundOn) return;
+  ensureAudio();
+  const ac = audioCtx;
+  if (!ac) return;
+  if (ac.state === 'suspended') ac.resume().catch(() => {});
+  const t = ac.currentTime;
+  const gain = ac.createGain();
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.045, t + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  gain.connect(ac.destination);
+  const base = ac.createOscillator();
+  base.type = 'sine';
+  base.frequency.setValueAtTime(880, t);
+  base.frequency.exponentialRampToValueAtTime(1174, t + 0.16);
+  const overtone = ac.createOscillator();
+  overtone.type = 'triangle';
+  overtone.frequency.setValueAtTime(1320, t);
+  const otGain = ac.createGain();
+  otGain.gain.value = 0.32;
+  base.connect(gain);
+  overtone.connect(otGain);
+  otGain.connect(gain);
+  base.start(t); overtone.start(t);
+  base.stop(t + 0.19); overtone.stop(t + 0.19);
+}
 
 /* --------------------------------------------------------------------------
    状态、存储与旧版迁移
@@ -584,7 +665,6 @@ function markName(name) {
   const idx = state.allNames.indexOf(name);
   if (idx !== -1) state.allNames.splice(idx, 1);
   state.calledNames = [name, ...state.calledNames.filter((n) => n !== name)];
-  state.lit = { name, t0: performance.now() };
   state.highlight = '';
   state.rolling = false;
   ensureGroupCoverage();
@@ -593,6 +673,7 @@ function markName(name) {
   renderAll({ keepResult: true });
   renderRollButtons();
   computeStarLayout();
+  celebratePick(name);
 }
 
 function renderRollButtons() {
@@ -606,30 +687,38 @@ function updateCounts() {
   el.totalCount.textContent = '总数: ' + allStudents().length;
   el.remainingCount.textContent = '剩余: ' + state.allNames.length;
   el.calledCount.textContent = '已点 ' + state.calledNames.length + ' 人';
-  updateListSummary();
+  renderPendingList();
 }
 
-/** 收起后的单行摘要：一眼看清是哪份名单、多少人、点了多少 */
-function updateListSummary() {
-  const total = allStudents().length;
-  const parts = [];
-  if (state.groups.length > 1) parts.push(`${state.groups.length} 个星区`);
-  else if (state.listName) parts.push(state.listName);
-  else if (total) parts.push('全班一片星空');
-  if (total) parts.push(`${total} 人`);
-  if (state.calledNames.length) parts.push(`已点 ${state.calledNames.length} 人`);
-  if (state.allNames.length) parts.push(`剩余 ${state.allNames.length} 人`);
-  el.listSummary.innerHTML = parts.length
-    ? parts.map((p) => `<span class="chip chip-muted">${esc(p)}</span>`).join('')
-    : '<span class="chip chip-muted">还没有名单，点右侧箭头展开后导入</span>';
-}
-
-/** 名单区收起/展开；收起后星图独占纵向空间 */
-function setListCollapsed(collapsed) {
-  el.listBody.hidden = collapsed;
-  el.listSummary.hidden = !collapsed;
-  el.toggleListCard.setAttribute('aria-expanded', String(!collapsed));
-  el.toggleListCard.title = collapsed ? '展开名单区' : '收起名单区，给星图腾空间';
+/** 待点名单：紧凑 chip 行，逐人「标记」走 markName（含庆祝与提示音），不另写标记逻辑 */
+function renderPendingList() {
+  const frag = document.createDocumentFragment();
+  if (!state.allNames.length) {
+    const empty = document.createElement('div');
+    empty.className = 'pending-empty';
+    empty.textContent = state.calledNames.length ? '全部已点亮' : '导入名单后可在这里逐人标记';
+    frag.appendChild(empty);
+  } else {
+    state.allNames.forEach((name) => {
+      const row = document.createElement('div');
+      row.className = 'pending-row';
+      const label = document.createElement('span');
+      label.className = 'pending-name';
+      label.textContent = name;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'small ghost pending-mark';
+      btn.textContent = '标记';
+      btn.dataset.pendingName = name;
+      btn.setAttribute('aria-label', `标记 ${name}`);
+      row.appendChild(label);
+      row.appendChild(btn);
+      frag.appendChild(row);
+    });
+  }
+  el.pendingList.innerHTML = '';
+  el.pendingList.appendChild(frag);
+  el.pendingCount.textContent = `待点 ${state.allNames.length} 人`;
 }
 
 function updateNamesTitle() {
@@ -651,7 +740,6 @@ function updateUIState() {
   el.exportCalled.disabled = !hasCalled;
   el.quickSync.disabled = !hasCalled;
   el.clearCalled.disabled = !hasCalled;
-  updateMarkBtnState();
 }
 
 function renderCalledList() {
@@ -703,7 +791,7 @@ function renderCalledList() {
 function showIdle() {
   el.starName.textContent = state.allNames.length
     ? '等待点名'
-    : (state.calledNames.length ? '全部已点亮' : '请先导入名单');
+    : (state.calledNames.length ? '全部已点亮' : '还没有名单，点头部的「名单」按钮导入');
   el.starName.classList.remove('is-rolling');
   el.starName.classList.add('is-idle');
   el.starGroupName.textContent = '';
@@ -744,7 +832,7 @@ function renderStarLegend() {
 function renderStarProgress() {
   el.starProgress.textContent = state.allNames.length
     ? `剩余 ${state.allNames.length} 人待点亮`
-    : (state.calledNames.length ? '全部已点亮' : '请先导入名单');
+    : (state.calledNames.length ? '全部已点亮' : '也可把名单文件直接拖到星图上');
 }
 
 function renderAll(opts = {}) {
@@ -763,70 +851,132 @@ function syncTextarea() {
   el.namesInput.value = state.allNames.join('\n');
 }
 
-/* 手动标记按钮：光标所在行或选中文本 */
-function updateMarkBtnState() {
-  const ta = el.namesInput;
-  const start = ta.selectionStart, end = ta.selectionEnd;
-  let hasSelection = false;
-  if (start !== end) hasSelection = ta.value.substring(start, end).trim().length > 0;
-  else {
-    const lines = ta.value.split('\n');
-    let cursor = 0;
-    for (const line of lines) {
-      const lineEnd = cursor + line.length + 1;
-      if (start >= cursor && start < lineEnd) { hasSelection = line.trim().length > 0; break; }
-      cursor = lineEnd;
-    }
-  }
-  el.markBtn.disabled = !hasSelection;
-  el.markBtn.classList.toggle('ghost', !hasSelection);
-}
-
-function manualMark() {
-  if (el.markBtn.disabled || state.rolling) return;
-  const ta = el.namesInput;
-  const start = ta.selectionStart, end = ta.selectionEnd;
-  let selected;
-  if (start !== end) selected = ta.value.substring(start, end);
-  else {
-    const lines = ta.value.split('\n');
-    let cursor = 0;
-    for (const line of lines) {
-      const lineEnd = cursor + line.length + 1;
-      if (start >= cursor && start < lineEnd) { selected = line; break; }
-      cursor = lineEnd;
-    }
-  }
-  const names = unique(String(selected || '').split(/[\n,;，；]+/).map(cleanName).filter(Boolean));
-  const valid = names.filter((n) => state.allNames.includes(n));
-  if (!valid.length) { toast('未检测到可标记的姓名'); return; }
-  valid.forEach((n) => {
-    state.allNames = state.allNames.filter((x) => x !== n);
-    state.calledNames = [n, ...state.calledNames.filter((x) => x !== n)];
-  });
-  state.lit = { name: valid[valid.length - 1], t0: performance.now() };
-  ensureGroupCoverage();
-  saveState();
-  syncTextarea();
-  renderAll({ keepResult: true });
-  toast(`已标记 ${valid.length} 人`);
-  computeStarLayout();
-}
-
 /* --------------------------------------------------------------------------
    星空视图（Canvas 2D）
    -------------------------------------------------------------------------- */
 const star = {
   ctx: null, width: 0, height: 0, dpr: 1, scale: 1,
-  tokens: {}, layout: [], layoutMap: new Map(), areas: [], dust: [], raf: null
+  tokens: {}, layout: [], layoutMap: new Map(), areas: [], dust: [], raf: null,
+  lastNow: 0,
+  // 离屏缓存：星云 / 边缘柔光按尺寸重建，辉光 / 流星精灵按 Token 重建
+  nebula: null, edgeLayer: null, glowCyan: null, glowGold: null, meteorSprite: null,
+  parallax: { x: 0, y: 0, tx: 0, ty: 0 },
+  meteor: null, nextMeteorAt: 0,
+  // 预分配粒子池（≤36 颗，只在抽中时激活，每帧不新建对象）
+  fx: {
+    particles: Array.from({ length: 36 }, () => ({ active: false, x: 0, y: 0, vx: 0, vy: 0, t0: 0, r: 1, warm: false })),
+    activeParticles: 0, particleBursts: 0, meteors: 0, edgeFlashes: 0, edgeT0: -1,
+    lineReveals: 0, lineReveal: null, staticHighlights: 0, parallaxApplied: false, nameTimer: 0
+  }
 };
+
+// 新增颜色一律在此登记；CSS 侧只允许出现在 :root Token 定义区
+const STAR_TOKEN_KEYS = [
+  'star-bg-top', 'star-bg-bottom', 'star-dim', 'star-lit', 'star-glow',
+  'star-line', 'star-highlight', 'star-dust', 'star-text', 'star-text-soft',
+  'star-nebula-cyan', 'star-nebula-gold', 'star-aurora', 'star-meteor', 'star-edge', 'star-particle'
+];
 
 function readStarTokens() {
   const cs = getComputedStyle(document.documentElement);
-  ['star-bg-top', 'star-bg-bottom', 'star-dim', 'star-lit', 'star-glow',
-    'star-line', 'star-highlight', 'star-dust', 'star-text-soft'].forEach((k) => {
-      star.tokens[k] = cs.getPropertyValue('--' + k).trim();
-    });
+  STAR_TOKEN_KEYS.forEach((k) => { star.tokens[k] = cs.getPropertyValue('--' + k).trim(); });
+  buildGlowSprites();
+  // 主题切换时星区尺寸没变，只需重画离屏层
+  if (star.width && star.height) { buildNebula(); buildEdgeLayer(); }
+}
+
+function hexAlpha(a) {
+  return Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+}
+
+function makeGlowSprite(color) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const rg = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  rg.addColorStop(0, color + 'cc');
+  rg.addColorStop(0.35, color + '52');
+  rg.addColorStop(1, color + '00');
+  g.fillStyle = rg;
+  g.fillRect(0, 0, 128, 128);
+  return c;
+}
+
+/** 辉光 / 流星精灵：只在 Token 变化时重建，绘制期一律 drawImage */
+function buildGlowSprites() {
+  const T = star.tokens;
+  if (!T['star-highlight'] || !T['star-glow'] || !T['star-meteor']) return;
+  star.glowCyan = makeGlowSprite(T['star-highlight']);
+  star.glowGold = makeGlowSprite(T['star-glow']);
+  const c = document.createElement('canvas');
+  c.width = 120; c.height = 8;
+  const g = c.getContext('2d');
+  const lg = g.createLinearGradient(0, 0, 120, 0);
+  lg.addColorStop(0, T['star-meteor'] + '00');
+  lg.addColorStop(0.72, T['star-meteor'] + '3a');
+  lg.addColorStop(1, T['star-meteor'] + 'd0');
+  g.fillStyle = lg;
+  g.fillRect(0, 3, 120, 2);
+  star.meteorSprite = c;
+}
+
+/** 星云 / 极光：离屏按尺寸缓存，仅在 resize / 主题变化时重绘 */
+function buildNebula() {
+  const W = star.width, H = star.height, dpr = star.dpr, T = star.tokens;
+  if (!W || !H || !T['star-bg-top']) return;
+  if (!star.nebula) star.nebula = document.createElement('canvas');
+  const c = star.nebula;
+  c.width = Math.round(W * dpr);
+  c.height = Math.round(H * dpr);
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, T['star-bg-top']);
+  bg.addColorStop(1, T['star-bg-bottom']);
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  const r = Math.max(W, H);
+  const blobs = [
+    { x: W * 0.22, y: H * 0.3, rr: r * 0.44, c: T['star-nebula-cyan'], a: 0.17 },
+    { x: W * 0.82, y: H * 0.7, rr: r * 0.38, c: T['star-nebula-cyan'], a: 0.11 },
+    { x: W * 0.62, y: H * 0.18, rr: r * 0.3, c: T['star-nebula-gold'], a: 0.075 }
+  ];
+  blobs.forEach((b) => {
+    const rg = g.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.rr);
+    rg.addColorStop(0, b.c + hexAlpha(b.a));
+    rg.addColorStop(1, b.c + '00');
+    g.fillStyle = rg;
+    g.fillRect(0, 0, W, H);
+  });
+  const au = g.createLinearGradient(0, H * 0.1, 0, H * 0.62);
+  au.addColorStop(0, T['star-aurora'] + '00');
+  au.addColorStop(0.5, T['star-aurora'] + '0e');
+  au.addColorStop(1, T['star-aurora'] + '00');
+  g.fillStyle = au;
+  g.fillRect(0, 0, W, H);
+  const vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, r * 0.74);
+  vg.addColorStop(0, T['star-bg-bottom'] + '00');
+  vg.addColorStop(1, T['star-bg-bottom'] + 'a0');
+  g.fillStyle = vg;
+  g.fillRect(0, 0, W, H);
+}
+
+/** 抽中时画布边缘一闪而过的柔光：同样离屏缓存，绘制期只是一次 drawImage */
+function buildEdgeLayer() {
+  const W = star.width, H = star.height, dpr = star.dpr, T = star.tokens;
+  if (!W || !H || !T['star-edge']) return;
+  if (!star.edgeLayer) star.edgeLayer = document.createElement('canvas');
+  const c = star.edgeLayer;
+  c.width = Math.round(W * dpr);
+  c.height = Math.round(H * dpr);
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const rg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.34, W / 2, H / 2, Math.max(W, H) * 0.72);
+  rg.addColorStop(0, T['star-edge'] + '00');
+  rg.addColorStop(0.72, T['star-edge'] + '1c');
+  rg.addColorStop(1, T['star-edge'] + '70');
+  g.fillStyle = rg;
+  g.fillRect(0, 0, W, H);
 }
 
 /** 按 groupOf 聚合现有学生；没有任何班级信息时自然只得到一组 */
@@ -851,6 +1001,8 @@ function resizeStarCanvas() {
   el.starCanvas.height = Math.round(rect.height * star.dpr);
   star.ctx.setTransform(star.dpr, 0, 0, star.dpr, 0, 0);
   computeStarLayout();
+  buildNebula();
+  buildEdgeLayer();
 }
 
 function computeStarLayout() {
@@ -910,33 +1062,132 @@ function computeStarLayout() {
   // 微星密度随画布面积走，星图变大后背景不至于显得空
   const dustCount = Math.min(260, Math.round(W * H / 3200));
   for (let i = 0; i < dustCount; i++) {
-    star.dust.push({ x: rnd() * W, y: rnd() * H, r: 0.4 + rnd() * 0.9, phase: rnd() * 6.28, speed: 0.3 + rnd() * 0.7 });
+    star.dust.push({
+      x: rnd() * W, y: rnd() * H, r: 0.4 + rnd() * 0.9,
+      phase: rnd() * 6.28, speed: 0.3 + rnd() * 0.7,
+      vx: (rnd() - 0.5) * 2.4, vy: (rnd() - 0.5) * 1.6
+    });
+  }
+}
+
+/* --------------------------------------------------------------------------
+   抽中瞬间的一次性庆祝：只在 markName（含待点名单逐人标记）触发，滚动过程不撒粒子
+   -------------------------------------------------------------------------- */
+function spawnParticles(x, y, now) {
+  const pool = star.fx.particles, n = 28; // 上限 28，池容量 36
+  for (let i = 0; i < n; i++) {
+    const q = pool[i];
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.28;
+    const speed = 26 + Math.random() * 56;
+    q.active = true;
+    q.x = x; q.y = y;
+    q.vx = Math.cos(a) * speed;
+    q.vy = Math.sin(a) * speed;
+    q.t0 = now;
+    q.r = 1 + Math.random() * 1.5;
+    q.warm = i % 3 === 0;
+  }
+  star.fx.particleBursts++;
+}
+
+/** 找到本次新增的那一段星座连线，供 500ms 沿路径渐显 */
+function buildLineReveal(name, now) {
+  const group = state.groupOf[name] || state.groups[0] || DEFAULT_GROUP;
+  const inGroup = (n) => (state.groupOf[n] || state.groups[0] || DEFAULT_GROUP) === group;
+  const k = state.calledNames.filter(inGroup).length;
+  if (k < 2) return null;
+  const prev = state.calledNames.slice(1).find(inGroup);
+  const a = prev && star.layoutMap.get(prev), b = star.layoutMap.get(name);
+  if (!a || !b) return null;
+  const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+  const i = k - 2;
+  const amp = Math.min(26, len * 0.12) * (i % 2 ? -1 : 1);
+  return {
+    group, ax: a.x, ay: a.y, bx: b.x, by: b.y,
+    cx: (a.x + b.x) / 2 - dy / len * amp,
+    cy: (a.y + b.y) / 2 + dx / len * amp,
+    t0: now
+  };
+}
+
+function strokePartialCurve(ctx, r, prog) {
+  ctx.beginPath();
+  ctx.moveTo(r.ax, r.ay);
+  for (let k = 1; k <= 14; k++) {
+    const u = prog * k / 14, v = 1 - u;
+    ctx.lineTo(v * v * r.ax + 2 * v * u * r.cx + u * u * r.bx,
+      v * v * r.ay + 2 * v * u * r.cy + u * u * r.by);
+  }
+  ctx.stroke();
+}
+
+function revealName() {
+  if (REDUCE_MOTION) return;
+  el.starName.classList.remove('is-celebrate');
+  void el.starName.offsetWidth; // 只在抽中时一次重排，用来重启动画
+  el.starName.classList.add('is-celebrate');
+  clearTimeout(star.fx.nameTimer);
+  star.fx.nameTimer = setTimeout(() => el.starName.classList.remove('is-celebrate'), 620);
+}
+
+function celebratePick(name) {
+  const now = performance.now();
+  state.lit = { name, t0: now };
+  const p = star.layoutMap.get(name);
+  if (p) {
+    if (REDUCE_MOTION) {
+      star.fx.staticHighlights++; // 降级：只保留一次静态高亮
+    } else {
+      spawnParticles(p.x, p.y, now);
+      star.fx.edgeT0 = now;
+      star.fx.edgeFlashes++;
+      star.fx.lineReveal = buildLineReveal(name, now);
+      if (star.fx.lineReveal) star.fx.lineReveals++;
+    }
+  }
+  revealName();
+  playPickChime();
+}
+
+function updateMeteor(now, W) {
+  if (REDUCE_MOTION) return;
+  if (!star.nextMeteorAt) star.nextMeteorAt = now + 7000 + Math.random() * 5000;
+  if (!star.meteor && now >= star.nextMeteorAt) {
+    star.meteor = {
+      x: W * (0.35 + Math.random() * 0.6), y: -12,
+      vx: -68 - Math.random() * 46, vy: 132 + Math.random() * 62, t0: now
+    };
+    star.fx.meteors++;
+    star.nextMeteorAt = now + 8000 + Math.random() * 7000; // 8–15 秒一次
   }
 }
 
 function drawStarFrame(now) {
   const ctx = star.ctx, T = star.tokens;
   if (!ctx || !star.width) return;
-  const W = star.width, H = star.height, t = now / 1000;
+  const W = star.width, H = star.height, t = now / 1000, s = star.scale || 1;
+  const dt = star.lastNow ? Math.min(0.05, (now - star.lastNow) / 1000) : 0;
+  star.lastNow = now;
 
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, T['star-bg-top']);
-  bg.addColorStop(1, T['star-bg-bottom']);
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
+  if (REDUCE_MOTION) { star.parallax.x = 0; star.parallax.y = 0; }
+  else {
+    star.parallax.x += (star.parallax.tx - star.parallax.x) * 0.08;
+    star.parallax.y += (star.parallax.ty - star.parallax.y) * 0.08;
+  }
 
-  // 多分组时给每片星区一圈极淡的光晕，帮助区分
-  if (star.areas.length > 1) {
+  // 背景层整体轻微视差，星点/连线/命中判定坐标保持不动
+  ctx.save();
+  ctx.translate(star.parallax.x, star.parallax.y);
+  if (star.nebula) ctx.drawImage(star.nebula, 0, 0, W, H);
+  else { ctx.fillStyle = T['star-bg-bottom']; ctx.fillRect(0, 0, W, H); }
+
+  // 多分组时给每片星区一圈极淡的光晕（缓存精灵，不逐帧建渐变）
+  if (star.areas.length > 1 && star.glowCyan) {
     star.areas.forEach((a) => {
-      const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
-      const radius = Math.max(a.w, a.h) * 0.62;
-      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-      glow.addColorStop(0, T['star-line'] + '18');
-      glow.addColorStop(1, T['star-line'] + '00');
-      ctx.fillStyle = glow;
-      ctx.fillRect(a.x, a.y, a.w, a.h);
-      ctx.strokeStyle = T['star-line'];
+      ctx.globalAlpha = 0.12;
+      ctx.drawImage(star.glowCyan, a.x, a.y, a.w, a.h);
       ctx.globalAlpha = 0.16;
+      ctx.strokeStyle = T['star-line'];
       ctx.setLineDash([3, 6]);
       ctx.strokeRect(a.x + 2, a.y + 2, a.w - 4, a.h - 4);
       ctx.setLineDash([]);
@@ -944,59 +1195,111 @@ function drawStarFrame(now) {
     });
   }
 
-  // 背景微星
+  // 背景微星：缓慢漂移 + 低对比闪烁；REDUCE_MOTION 下完全静止
   ctx.fillStyle = T['star-dust'];
+  const dustR = Math.min(s, 1.4);
   star.dust.forEach((d) => {
-    ctx.globalAlpha = REDUCE_MOTION ? 0.3 : 0.16 + 0.24 * (0.5 + 0.5 * Math.sin(t * d.speed + d.phase));
+    if (!REDUCE_MOTION) {
+      d.x += d.vx * dt; d.y += d.vy * dt;
+      if (d.x < -2) d.x += W + 4; else if (d.x > W + 2) d.x -= W + 4;
+      if (d.y < -2) d.y += H + 4; else if (d.y > H + 2) d.y -= H + 4;
+    }
+    ctx.globalAlpha = REDUCE_MOTION ? 0.3 : 0.14 + 0.22 * (0.5 + 0.5 * Math.sin(t * d.speed + d.phase));
     ctx.beginPath();
-    ctx.arc(d.x, d.y, d.r * Math.min(star.scale || 1, 1.4), 0, Math.PI * 2);
+    ctx.arc(d.x, d.y, d.r * dustR, 0, Math.PI * 2);
     ctx.fill();
   });
   ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // 偶发流星：短拖尾、低透明度，绘制期只是一次 drawImage
+  updateMeteor(now, W);
+  if (!REDUCE_MOTION && star.meteor && star.meteorSprite) {
+    const m = star.meteor, age = (now - m.t0) / 750;
+    if (age >= 1) star.meteor = null;
+    else {
+      m.x += m.vx * dt; m.y += m.vy * dt;
+      ctx.save();
+      ctx.translate(m.x, m.y);
+      ctx.rotate(Math.atan2(m.vy, m.vx));
+      ctx.globalAlpha = 0.3 * Math.sin(Math.PI * age);
+      ctx.drawImage(star.meteorSprite, -92, -4, 92, 8);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // 抽中时画布边缘一闪而过的柔光（离屏缓存）
+  if (!REDUCE_MOTION && star.edgeLayer && star.fx.edgeT0 > 0) {
+    const a = (now - star.fx.edgeT0) / 1000;
+    if (a < 0.6) {
+      ctx.globalAlpha = 0.3 * Math.sin(Math.PI * a / 0.6);
+      ctx.drawImage(star.edgeLayer, 0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
+  }
 
   const calledSet = new Set(state.calledNames);
   const calledOldestFirst = [...state.calledNames].reverse();
 
-  // 星座连线：同组内按点名先后连起来
-  ctx.strokeStyle = T['star-line'];
-  ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.34;
+  // 星座连线：二次贝塞尔轻弧 + 低透明度宽描边柔光底 + 细线；按点名先后渐隐
+  const reveal = REDUCE_MOTION ? null : star.fx.lineReveal;
+  const revealLive = reveal && (now - reveal.t0) < 500;
   star.areas.forEach((area) => {
     const pts = calledOldestFirst
       .filter((n) => (state.groupOf[n] || state.groups[0] || DEFAULT_GROUP) === area.name)
       .map((n) => star.layoutMap.get(n)).filter(Boolean);
     if (pts.length < 2) return;
-    ctx.beginPath();
-    pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-    ctx.stroke();
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (revealLive && reveal.group === area.name && i === pts.length - 2) continue;
+      const a = pts[i], b = pts[i + 1];
+      const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+      const amp = Math.min(26, len * 0.12) * (i % 2 ? -1 : 1);
+      const cx = (a.x + b.x) / 2 - dy / len * amp;
+      const cy = (a.y + b.y) / 2 + dx / len * amp;
+      const freshness = 0.36 + 0.5 * (i / Math.max(1, pts.length - 2));
+      ctx.strokeStyle = T['star-highlight'];
+      ctx.lineWidth = 5.5 * s;
+      ctx.globalAlpha = 0.055 * freshness;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(cx, cy, b.x, b.y); ctx.stroke();
+      ctx.strokeStyle = i === pts.length - 2 ? T['star-highlight'] : T['star-line'];
+      ctx.lineWidth = 1.05 * s;
+      ctx.globalAlpha = 0.38 * freshness;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(cx, cy, b.x, b.y); ctx.stroke();
+    }
   });
   ctx.globalAlpha = 1;
 
-  // 星点
-  const s = star.scale || 1;
+  // 新点亮的最后一段：约 500ms 沿路径渐显，不一刀切出现
+  if (revealLive) {
+    const r = reveal, prog = Math.min(1, (now - r.t0) / 500);
+    const fade = 1 - 0.6 * prog; // 收尾时淡出，和完整链路自然接上
+    ctx.strokeStyle = T['star-highlight'];
+    ctx.lineWidth = 5.5 * s; ctx.globalAlpha = 0.1 * fade; strokePartialCurve(ctx, r, prog);
+    ctx.lineWidth = 1.6 * s; ctx.globalAlpha = 0.75 * fade; strokePartialCurve(ctx, r, prog);
+    ctx.globalAlpha = 1;
+  } else if (star.fx.lineReveal) star.fx.lineReveal = null;
+
+  // 星点：青蓝用于未点/高亮，暖金用于已点亮；辉光一律走缓存精灵
   star.layout.forEach((p) => {
     const called = calledSet.has(p.name);
     const highlight = state.highlight === p.name;
     const twinkle = REDUCE_MOTION ? 0.7 : 0.58 + 0.42 * (0.5 + 0.5 * Math.sin(t * 1.5 + p.phase));
     const radius = (highlight ? 5.2 : called ? 2.9 : 2.2) * s;
-
     if (called || highlight) {
       const glowR = (highlight ? 26 : 12) * s;
-      const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowR);
-      glow.addColorStop(0, (highlight ? T['star-highlight'] : T['star-glow']) + 'aa');
-      glow.addColorStop(1, (highlight ? T['star-highlight'] : T['star-glow']) + '00');
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2);
-      ctx.fill();
+      const sprite = highlight ? star.glowCyan : star.glowGold;
+      if (sprite) {
+        ctx.globalAlpha = highlight ? 0.85 : 0.6;
+        ctx.drawImage(sprite, p.x - glowR, p.y - glowR, glowR * 2, glowR * 2);
+        ctx.globalAlpha = 1;
+      }
     }
-    // 每颗星一层极淡柔光，保证投影上暗星也看得见
-    ctx.fillStyle = called ? T['star-glow'] : T['star-dim'];
+    ctx.fillStyle = called ? T['star-glow'] : T['star-line'];
     ctx.globalAlpha = called ? 0.14 : 0.1;
     ctx.beginPath();
     ctx.arc(p.x, p.y, (called ? 8 : 5) * s, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.fillStyle = highlight ? T['star-highlight'] : called ? T['star-lit'] : T['star-dim'];
     ctx.globalAlpha = highlight ? 1 : called ? 0.95 : 0.55 + 0.35 * twinkle;
     ctx.beginPath();
@@ -1005,46 +1308,79 @@ function drawStarFrame(now) {
     ctx.globalAlpha = 1;
   });
 
-  // 已点学生姓名直接标在各自星点旁：星空模式不再占用右侧栏，名单长在星图上
+  // 已点学生姓名直接标在各自星点旁
   const labelScale = Math.min(s, 1.45);
   ctx.font = `600 ${Math.round(14 * labelScale)}px system-ui, -apple-system, "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif`;
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = T['star-glow'];
-  ctx.shadowBlur = 9 * labelScale;
   let labelCount = 0;
   star.layout.forEach((p) => {
     if (!calledSet.has(p.name)) return;
     labelCount++;
     const gap = 7 * s;
     const w = ctx.measureText(p.name).width;
-    const toRight = p.x + gap + w <= W - 8; // 贴右边界的星把名字写到左侧，避免被裁掉
+    const toRight = p.x + gap + w <= W - 8;
+    const isHi = state.highlight === p.name;
     ctx.textAlign = toRight ? 'left' : 'right';
-    ctx.fillStyle = state.highlight === p.name ? T['star-highlight'] : T['star-lit'];
-    ctx.globalAlpha = state.highlight === p.name ? 1 : 0.9;
+    ctx.shadowColor = isHi ? T['star-highlight'] : T['star-glow'];
+    ctx.shadowBlur = 9 * labelScale;
+    ctx.fillStyle = isHi ? T['star-highlight'] : T['star-lit'];
+    ctx.globalAlpha = isHi ? 1 : 0.9;
     ctx.fillText(p.name, toRight ? p.x + gap : p.x - gap, p.y + 0.5);
   });
   star.labelCount = labelCount;
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
 
-  // 点亮涟漪
-  if (state.lit && !REDUCE_MOTION) {
+  // 抽中：爆闪光环 + 双层涟漪；降级时改为一次静态高亮
+  if (state.lit) {
     const age = (now - state.lit.t0) / 1000;
     const p = star.layoutMap.get(state.lit.name);
     if (p && age < 1.6) {
-      ctx.strokeStyle = T['star-glow'];
-      ctx.lineWidth = 1.6 * (star.scale || 1);
-      for (let k = 0; k < 2; k++) {
-        const a = age - k * 0.28;
-        if (a <= 0) continue;
-        ctx.globalAlpha = Math.max(0, 0.6 * (1 - a / 1.6));
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, (6 + a * 36) * (star.scale || 1), 0, Math.PI * 2);
-        ctx.stroke();
+      if (REDUCE_MOTION) {
+        ctx.strokeStyle = T['star-highlight'];
+        ctx.lineWidth = 1.8 * s;
+        ctx.globalAlpha = Math.max(0, 0.5 * (1 - age / 1.6));
+        ctx.beginPath(); ctx.arc(p.x, p.y, 20 * s, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else {
+        if (age < 0.5 && star.glowGold) {
+          const k = age / 0.5, rr = (18 + k * 36) * s;
+          ctx.globalAlpha = 0.55 * (1 - k);
+          ctx.drawImage(star.glowGold, p.x - rr, p.y - rr, rr * 2, rr * 2);
+        }
+        for (let k = 0; k < 2; k++) {
+          const a = age - k * 0.22;
+          if (a <= 0 || a > 1.2) continue;
+          ctx.strokeStyle = k ? T['star-glow'] : T['star-highlight'];
+          ctx.lineWidth = (k ? 1.2 : 1.8) * s;
+          ctx.globalAlpha = Math.max(0, 0.55 * (1 - a / 1.2));
+          ctx.beginPath(); ctx.arc(p.x, p.y, (6 + a * 40) * s, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       }
-      ctx.globalAlpha = 1;
     }
   }
+
+  // 少量粒子迸发：900ms 衰减，池化不逐帧分配
+  if (!REDUCE_MOTION) {
+    const pool = star.fx.particles;
+    let active = 0;
+    for (let i = 0; i < pool.length; i++) {
+      const q = pool[i];
+      if (!q.active) continue;
+      const a = (now - q.t0) / 900;
+      if (a >= 1) { q.active = false; continue; }
+      active++;
+      const dtp = (now - q.t0) / 1000;
+      ctx.globalAlpha = 0.72 * (1 - a) * (1 - a);
+      ctx.fillStyle = q.warm ? T['star-particle'] : T['star-highlight'];
+      ctx.beginPath();
+      ctx.arc(q.x + q.vx * dtp, q.y + q.vy * dtp, q.r * (1 - a * 0.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    star.fx.activeParticles = active;
+    ctx.globalAlpha = 1;
+  } else star.fx.activeParticles = 0;
 }
 
 function starLoop(now) {
@@ -1196,20 +1532,33 @@ el.submitSync.addEventListener('click', async () => {
 /* --------------------------------------------------------------------------
    事件绑定
    -------------------------------------------------------------------------- */
-/* 已点名单抽屉：头部按钮开合、关闭按钮、点遮罩关闭 */
+/* 左右抽屉：头部按钮开合、关闭按钮、点遮罩关闭；打开时另一个自动关闭 */
+el.rosterBtn.addEventListener('click', () => {
+  if (el.rosterDrawer.classList.contains('is-open')) closeRosterPanel();
+  else openRosterPanel();
+});
+el.closeRosterDrawer.addEventListener('click', () => closeRosterPanel());
+el.rosterDrawer.addEventListener('click', (e) => {
+  if (e.target === el.rosterDrawer) closeRosterPanel();
+});
+
 el.calledPanelBtn.addEventListener('click', () => {
   if (el.calledDrawer.classList.contains('is-open')) closeCalledPanel();
   else openCalledPanel();
 });
-el.closeCalledDrawer.addEventListener('click', closeCalledPanel);
+el.closeCalledDrawer.addEventListener('click', () => closeCalledPanel());
 el.calledDrawer.addEventListener('click', (e) => {
   if (e.target === el.calledDrawer) closeCalledPanel();
 });
 
-// 名单区收起/展开：收起后星图立刻吃掉腾出来的空间
-el.toggleListCard.addEventListener('click', () => {
-  setListCollapsed(el.toggleListCard.getAttribute('aria-expanded') === 'true');
-  requestAnimationFrame(resizeStarCanvas);
+/* 待点名单逐人标记：复用 markName → celebratePick → 提示音的完整链路 */
+el.pendingList.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-pending-name]');
+  if (!btn) return;
+  const name = btn.dataset.pendingName;
+  if (!name || !state.allNames.includes(name)) return;
+  if (state.rolling) { toast('请先停止滚动再标记'); return; }
+  markName(name);
 });
 
 el.dropZone.addEventListener('click', () => el.fileInput.click());
@@ -1221,6 +1570,8 @@ el.fileInput.addEventListener('change', (e) => {
   e.target.value = '';
 });
 bindDrop(el.dropZone, 'roster', [el.dropZone]);
+// 整片星盘也接受文件拖放：复用同一套解析与导入预览流程，只多一层高亮
+bindDrop(el.starView, 'roster', [el.starView]);
 
 el.importCalled.addEventListener('click', () => el.calledFileInput.click());
 el.calledFileInput.addEventListener('change', (e) => {
@@ -1230,22 +1581,22 @@ el.calledFileInput.addEventListener('change', (e) => {
 bindDrop(el.calledList, 'called', [el.calledList]);
 bindDrop(el.calledDropHint, 'called', [el.calledList]);
 
-// 星空模式下列表收起、拖拽区一起隐藏：整页拖拽兜底，文件拖到页面任意位置都能导入名单
+// 页面其余位置的拖拽兜底；星盘与各落点自行处理，整页兜底不重复解析
 ['dragover', 'drop'].forEach((ev) => {
   document.addEventListener(ev, (e) => {
     if (!e.dataTransfer || !Array.from(e.dataTransfer.types || []).includes('Files')) return;
     e.preventDefault();
     if (ev !== 'drop') return;
     const t = e.target;
-    if (t && t.closest && t.closest('#dropZone, #calledList, #calledDropHint')) return; // 交给各自的落点处理
+    if (t && t.closest && t.closest('#starView, #dropZone, #calledList, #calledDropHint')) return;
     if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files, 'roster');
   });
 });
 
-el.toggleRollBtn.addEventListener('click', () => state.rolling ? stopRoll() : startRoll());
-el.markBtn.addEventListener('click', manualMark);
-
-['select', 'click', 'keyup'].forEach((ev) => el.namesInput.addEventListener(ev, updateMarkBtnState));
+el.toggleRollBtn.addEventListener('click', () => {
+  ensureAudio(); // 用户手势里解锁 AudioContext，保证随后「停止」时的提示音能出声
+  state.rolling ? stopRoll() : startRoll();
+});
 el.namesInput.addEventListener('blur', () => {
   const raw = el.namesInput.value;
   const cleaned = raw.split('\n').map((l) => l.trim()).filter(Boolean).join('\n');
@@ -1356,6 +1707,19 @@ el.starCanvas.addEventListener('click', (e) => {
   else if (state.calledNames.includes(best.name)) toast(`${best.name} 已经点过了`);
 });
 
+// 视差：仅指针位于画布内时生效，最大 ±6px；离开画布平滑归零
+el.starCanvas.addEventListener('pointermove', (e) => {
+  if (REDUCE_MOTION) return;
+  const r = el.starCanvas.getBoundingClientRect();
+  const clamp = (v) => Math.max(-6, Math.min(6, v));
+  star.parallax.tx = clamp(((e.clientX - r.left) / r.width - 0.5) * 12);
+  star.parallax.ty = clamp(((e.clientY - r.top) / r.height - 0.5) * 12);
+  star.fx.parallaxApplied = true;
+});
+el.starCanvas.addEventListener('pointerleave', () => {
+  star.parallax.tx = 0; star.parallax.ty = 0;
+});
+
 // 模态开合
 el.importFromGitHub.addEventListener('click', () => openModal('githubModal'));
 el.quickSync.addEventListener('click', openSyncModal);
@@ -1384,6 +1748,8 @@ document.querySelectorAll('input[name="importMode"]').forEach((r) => {
 });
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
+  // 先关最上层浮层：两个抽屉互斥，任一开着就只关它；之后才轮到模态
+  if (el.rosterDrawer.classList.contains('is-open')) { closeRosterPanel(); return; }
   if (el.calledDrawer.classList.contains('is-open')) { closeCalledPanel(); return; }
   document.querySelectorAll('.modal.is-open').forEach((m) => m.classList.remove('is-open'));
 });
@@ -1415,13 +1781,13 @@ window.addEventListener('beforeunload', () => {
    -------------------------------------------------------------------------- */
 function init() {
   initTheme();
+  initSound();
   readStarTokens();
   loadState();
   syncTextarea();
   updateNamesTitle();
   star.ctx = el.starCanvas.getContext('2d');
-  // 已有名单时把名单区收成一行，星图独占纵向空间；空名单保持展开方便导入
-  setListCollapsed(allStudents().length > 0);
+  // 名单默认什么都不弹：首屏只有一片星空与一个「开始滚动」
   resizeStarCanvas();
   startStarLoop();
   renderRollButtons();

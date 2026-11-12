@@ -22,17 +22,30 @@
   --scrim: rgba(2, 6, 23, 0.62);
   --radius: 8px;
 
-  /* 星空舞台专用调色：不论页面主题，画布始终是深空 */
-  --star-bg-top: #0a1226;
-  --star-bg-bottom: #040812;
-  --star-dim: #4c6285;
-  --star-lit: #ffd98a;
-  --star-glow: #ffc65c;
-  --star-line: #6f8fc4;
-  --star-highlight: #a5d8ff;
-  --star-dust: #8ea7cf;
+  /* 滚动条：深色下用与 --muted 同系的冷灰半透明，融进深空但保留可辨识度 */
+  --scrollbar-track: rgba(148, 163, 184, 0.06);
+  --scrollbar-thumb: rgba(148, 163, 184, 0.42);
+  --scrollbar-thumb-hover: rgba(148, 163, 184, 0.62);
+
+  /* 星空舞台专用调色：不论页面主题，画布始终是深空（.light-theme 不覆盖本组） */
+  --star-bg-top: #071426;
+  --star-bg-bottom: #03070f;
+  --star-dim: #5b9fc4;        /* 未点亮：青蓝 */
+  --star-lit: #ffd98a;        /* 已点亮：暖金 */
+  --star-glow: #ffc65c;       /* 暖金辉光 */
+  --star-line: #63cfe6;       /* 星座连线：青蓝 */
+  --star-highlight: #8ee6ff;  /* 高亮 / 抽中光环：亮青蓝 */
+  --star-dust: #9fc4e8;
   --star-text: #f2f6ff;
   --star-text-soft: #a9bcd9;
+
+  /* 氛围层专用：星云 / 极光 / 流星 / 抽中柔光 / 粒子，一律只在此定义 */
+  --star-nebula-cyan: #2b7fa8;
+  --star-nebula-gold: #a4732f;
+  --star-aurora: #3fa7b8;
+  --star-meteor: #cdefff;
+  --star-edge: #7fe3f5;
+  --star-particle: #ffd98a;
 }
 
 .light-theme {
@@ -49,7 +62,57 @@
   --surface-3: rgba(15, 23, 42, 0.04);
   --shadow: 0 6px 30px rgba(15, 23, 42, 0.12);
   --field-bg: rgba(15, 23, 42, 0.02);
+
+  /* 浅色下改用深色半透明滑块，落在白底上不刺眼也看得见 */
+  --scrollbar-track: rgba(15, 23, 42, 0.06);
+  --scrollbar-thumb: rgba(15, 23, 42, 0.28);
+  --scrollbar-thumb-hover: rgba(15, 23, 42, 0.45);
 }
+
+/* ============================================================
+   滚动条主题化：四处滚动容器共用一组声明，两条技术路径都写
+   标准属性给 Firefox / 新版 Chromium，WebKit 伪元素给本机 Windows + Edge
+   ============================================================ */
+textarea,
+.pending-list,
+.called-list,
+.modal-content,
+html,
+body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+textarea::-webkit-scrollbar,
+.pending-list::-webkit-scrollbar,
+.called-list::-webkit-scrollbar,
+.modal-content::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar { width: 10px; height: 10px; }
+
+textarea::-webkit-scrollbar-track,
+.pending-list::-webkit-scrollbar-track,
+.called-list::-webkit-scrollbar-track,
+.modal-content::-webkit-scrollbar-track,
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+
+textarea::-webkit-scrollbar-thumb,
+.pending-list::-webkit-scrollbar-thumb,
+.called-list::-webkit-scrollbar-thumb,
+.modal-content::-webkit-scrollbar-thumb,
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover,
+.pending-list::-webkit-scrollbar-thumb:hover,
+.called-list::-webkit-scrollbar-thumb:hover,
+.modal-content::-webkit-scrollbar-thumb:hover,
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
 /* ============================================================
    基础
@@ -153,40 +216,48 @@ h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
 .col { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .main-col { flex: 1; }
 
-/* 名单区可收起：星空模式自动收成一行摘要 */
-.list-card { flex: 0 0 auto; }
-.list-card-head { display: flex; align-items: center; gap: 10px; }
+/* 名单收进左侧抽屉后，主列只剩一片星空；抽屉内保持紧凑表单 + 待点 chip 行 */
+.roster-hint { font-size: 12px; margin-bottom: 10px; }
 
-.collapse-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.collapse-btn:hover { color: var(--text); }
-.collapse-btn .icon { width: 15px; height: 15px; transition: transform 200ms ease; }
-.collapse-btn[aria-expanded="false"] .icon { transform: rotate(-90deg); }
-
-.list-body[hidden] { display: none; }
-
-.list-summary {
+.pending-head {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  color: var(--muted);
+  justify-content: space-between;
+  gap: 10px;
+  margin: 14px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 
-.list-summary .chip { font-size: 12px; padding: 3px 9px; }
+.pending-head .section-title { font-size: 14px; }
+.pending-head .muted { font-size: 12px; }
+
+.pending-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--surface-2), transparent);
+}
+
+.pending-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.pending-name { min-width: 0; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.pending-list button.pending-mark { flex: 0 0 auto; }
+.pending-empty { padding: 16px 8px; color: var(--muted); font-size: 13px; text-align: center; }
 
 .card {
   background: var(--card);
@@ -305,7 +376,7 @@ button.small { font-size: 13px; padding: 6px 9px; white-space: nowrap; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 12px;
   padding: 12px;
   pointer-events: none;
   text-align: center;
@@ -329,6 +400,20 @@ button.small { font-size: 13px; padding: 6px 9px; white-space: nowrap; }
 }
 
 .star-name.is-rolling { color: var(--star-highlight); opacity: 0.9; }
+
+/* 抽中瞬间：姓名带一层暖金/青蓝光晕浮现，只动 transform + opacity */
+.star-name.is-celebrate {
+  text-shadow: 0 0 22px var(--star-glow), 0 0 48px var(--star-highlight), 0 2px 12px var(--star-bg-bottom);
+  animation: star-name-reveal 560ms ease-out;
+}
+
+@keyframes star-name-reveal {
+  /* 投影优先：姓名全程保持可读，只做轻微上浮；「浮现」靠光晕与位移，不靠压暗文字 */
+  from { opacity: 0.9; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.icon-btn.is-on { color: var(--accent); }
 
 /* 空闲态只留一行轻提示，让星图本身成为主角；大号字只在滚动/出结果时出现 */
 .star-name.is-idle {
@@ -371,6 +456,19 @@ button.small { font-size: 13px; padding: 6px 9px; white-space: nowrap; }
   pointer-events: none;
 }
 
+/* 整片星盘接受文件拖放：沿用 .drop-zone.is-dragover 的强调描边语言 */
+.star-view.is-dragover { border-color: var(--accent); }
+
+.star-view.is-dragover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius);
+  background: var(--glass);
+  pointer-events: none;
+}
+
 /* ============================================================
    已点名单：右侧滑出抽屉（替代原右侧栏）
    ============================================================ */
@@ -402,6 +500,17 @@ button.small { font-size: 13px; padding: 6px 9px; white-space: nowrap; }
 
 @keyframes drawer-in {
   from { transform: translateX(28px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+
+/* 左侧抽屉：复用同一套 .drawer 遮罩 / 面板 / z-index，只反转方向。
+   JS 保证两个抽屉互斥，任意时刻只有一个 .is-open，遮罩不会叠加打架。 */
+.drawer-left { justify-content: flex-start; }
+.drawer-left .drawer-panel { border-left: 0; border-right: 1px solid var(--border); }
+.drawer.is-open.drawer-left .drawer-panel { animation: drawer-in-left 220ms ease-out; }
+
+@keyframes drawer-in-left {
+  from { transform: translateX(-28px); opacity: 0.4; }
   to { transform: none; opacity: 1; }
 }
 
@@ -602,9 +711,6 @@ code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
   html { overflow: auto; }
   body { display: block; height: auto; min-height: 100%; overflow-y: auto; }
   .app { width: 100%; height: auto; min-height: 100vh; max-height: none; margin: 0; border-radius: 0; border-left: 0; border-right: 0; box-shadow: none; }
-  .row { flex-direction: column; gap: 14px; }
-  .section-header { align-items: flex-start; flex-direction: column; }
-  .list-card-head { width: 100%; justify-content: space-between; }
   .count-group { width: 100%; margin-left: 0; }
   .kbd { flex: 1; text-align: center; }
   .star-view { min-height: 320px; }
@@ -612,7 +718,7 @@ code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
   .called-actions { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .called-actions .small { width: 100%; padding-left: 3px; padding-right: 3px; }
   .roll-actions { width: 100%; }
-  .roll-actions .big { flex: 1; }
+  .roll-actions .big { min-width: 180px; }
   .header-actions { flex-wrap: wrap; justify-content: flex-end; }
 }
 
@@ -620,6 +726,7 @@ code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
   .import-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .called-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .drawer-panel { width: 100vw; border-left: 0; }
+  .drawer-left .drawer-panel { border-right: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
