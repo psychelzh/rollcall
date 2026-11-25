@@ -290,7 +290,8 @@ function loadState() {
 }
 
 /* --------------------------------------------------------------------------
-   名单解析：纯文本 / CSV / TSV，自动识别表头、姓名列与班级列
+   名单解析：纯文本 / CSV / TSV / xlsx 共用同一套「二维表格」逻辑
+   xlsx 只负责把文件解成 table，列定位 / 分组 / 去重 / 命名全部走这里
    -------------------------------------------------------------------------- */
 function splitRows(text) {
   return text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
@@ -332,6 +333,12 @@ function isHeaderRow(cells) {
 
 function isNumericCell(s) { return /^\d+$/.test(String(s || '').trim()); }
 
+/* Excel / WPS 常把整数数值序列化成 1.0；xlsx 的序号列判定要接受这种写法。
+   纯文本路径继续用 isNumericCell，语义不动，保证零回归。 */
+function isNumberLike(s) {
+  return /^\d+(?:\.\d+)?$/.test(String(s || '').trim());
+}
+
 function pickNameColumn(cells, header) {
   if (header) {
     const idx = header.findIndex((c) => /姓名|名字|name/i.test(c));
@@ -353,40 +360,359 @@ function cleanName(s) {
   return String(s || '').replace(/\s+/g, ' ').trim().replace(/^["'「『]|["'」』]$/g, '').trim();
 }
 
+/* 表格模式（xlsx）用的通用识别：不写死「第几行 / 第几列」。
+   normCell 折叠内部空白与换行，模板「平时\r\n成绩」这类表头才会被正确比较。 */
+const NAME_HEADER = /姓名|名字|name|学生姓名/i;
+const SEQ_HEADER = /^(序号|编号|no\.?|index|#|序)$/i;
+const ID_HEADER = /学号|student\s*id|学籍号/i;
+const XLSX_HEADER_SCAN = 20;   // 只在前 20 行里找表头，换个课程 / 学期模板也能认
+
+function normCell(s) {
+  return String(s || '').replace(/\s+/g, ' ').trim();
+}
+
+/** 表头行判据：至少 2 个可识别表头词，且含「姓名」类词；返回行下标，找不到返回 -1 */
+function findHeaderRow(table, limit) {
+  const upto = Math.min(table.length, Math.max(1, limit || 1));
+  for (let i = 0; i < upto; i++) {
+    const cells = (table[i] || []).map(normCell);
+    if (cells.length < 2) continue;
+    const hits = cells.filter((c) => HEADER_WORD.test(c)).length;
+    if (hits >= 2 && cells.some((c) => NAME_HEADER.test(c))) return i;
+  }
+  return -1;
+}
+
+function findSeqColumn(header) {
+  if (!header) return -1;
+  return header.findIndex((c) => SEQ_HEADER.test(normCell(c)) || /序号/.test(normCell(c)));
+}
+
+function findIdColumn(header) {
+  if (!header) return -1;
+  return header.findIndex((c) => ID_HEADER.test(normCell(c)));
+}
+
 /**
- * 把一段名单文本解析成 [{name, group}]。
- * fallbackGroup 通常是文件名；没有班级信息时，整份名单就是一组 → 全班一片星空。
+ * 把二维数组解成 [{name, group}]。txt / csv / tsv 与 xlsx 共用这一套，
+ * 不另起命名 / 分组 / 去重体系。
+ * opts.strictRows=true（xlsx）：扫描前若干行找表头，并按「序号列纯数字 + 姓名列非空」
+ * 圈定有效行，抬头行 / 说明行 / 末尾统计行 / 空白行 / 纯数字点名列全部排除。
+ * opts 缺省（纯文本路径）：行为与历史版本逐字一致 —— 表头只看第一行，数据行只靠非空判定。
  */
-function parseRoster(text, fallbackGroup) {
-  const rows = splitRows(text);
+function parseRosterRows(table, fallbackGroup, opts = {}) {
+  const strict = !!opts.strictRows;
   const issues = [];
-  if (!rows.length) return { items: [], issues: ['文件里没有可识别的内容'], hasClassColumn: false };
+  if (!table.length) return { items: [], issues: ['文件里没有可识别的内容'], hasClassColumn: false, meta: null };
 
-  const delim = detectDelimiter(rows[0]);
-  const table = rows.map((r) => parseLine(r, delim));
   let header = null;
-  if (isHeaderRow(table[0])) header = table.shift();
+  let dataRows = table;
+  let headerRow = -1;
+  if (strict) {
+    headerRow = findHeaderRow(table, opts.headerScan || XLSX_HEADER_SCAN);
+    if (headerRow < 0) {
+      return { items: [], issues: ['未识别到表头行（需含「姓名」等列）'], hasClassColumn: false, meta: null };
+    }
+    header = table[headerRow].map(normCell);
+    dataRows = table.slice(headerRow + 1);
+  } else if (isHeaderRow(table[0])) {
+    header = table[0];
+    headerRow = 0;
+    dataRows = table.slice(1);
+  }
 
-  const nameCol = pickNameColumn(table[0] || [], header);
+  const nameCol = pickNameColumn(dataRows[0] || [], header);
   const classCol = findClassColumn(header);
+  const seqCol = strict ? findSeqColumn(header) : -1;
+  const idCol = strict ? findIdColumn(header) : -1;
   const items = [];
 
-  table.forEach((cells, i) => {
-    const name = cleanName(cells[nameCol]);
-    if (!name) { issues.push(`第 ${i + 1} 行未识别到姓名，已跳过`); return; }
-    if (isHeaderRow(cells)) { issues.push(`第 ${i + 1} 行疑似表头，已跳过`); return; }
-    if (name.length > 24) issues.push(`第 ${i + 1} 行内容偏长（${name.length} 字），请留意`);
-    const group = classCol >= 0 ? cleanName(cells[classCol]) : '';
-    items.push({ name, group: group || fallbackGroup || DEFAULT_GROUP });
-  });
+  if (!strict) {
+    // 纯文本 / CSV / TSV 原路径：与历史版本逐字一致，保证零回归
+    dataRows.forEach((cells, i) => {
+      const name = cleanName(cells[nameCol]);
+      if (!name) { issues.push(`第 ${i + 1} 行未识别到姓名，已跳过`); return; }
+      if (isHeaderRow(cells)) { issues.push(`第 ${i + 1} 行疑似表头，已跳过`); return; }
+      if (name.length > 24) issues.push(`第 ${i + 1} 行内容偏长（${name.length} 字），请留意`);
+      const group = classCol >= 0 ? cleanName(cells[classCol]) : '';
+      items.push({ name, group: group || fallbackGroup || DEFAULT_GROUP });
+    });
+  } else {
+    // xlsx：以序号列 + 姓名列的数据特征圈定有效行，不写死行数 / 列号
+    dataRows.forEach((cells) => {
+      const name = cleanName(cells[nameCol]);
+      if (!name) return;
+      if (seqCol >= 0 && !isNumberLike(cells[seqCol])) return;
+      if (isHeaderRow(cells)) return;
+      if (name.length > 24) return;
+      const group = classCol >= 0 ? cleanName(cells[classCol]) : '';
+      items.push({ name, group: group || fallbackGroup || DEFAULT_GROUP });
+    });
+  }
 
-  return { items, issues, hasClassColumn: classCol >= 0 };
+  return {
+    items, issues, hasClassColumn: classCol >= 0,
+    meta: { headerRow, nameCol, classCol, seqCol, idCol }
+  };
+}
+
+/** 纯文本入口：转成二维数组后交给 parseRosterRows，行为与历史版本一致 */
+function parseRoster(text, fallbackGroup) {
+  const rows = splitRows(text);
+  if (!rows.length) return { items: [], issues: ['文件里没有可识别的内容'], hasClassColumn: false, meta: null };
+  const delim = detectDelimiter(rows[0]);
+  const table = rows.map((r) => parseLine(r, delim));
+  return parseRosterRows(table, fallbackGroup);
 }
 
 function parseTextarea() {
   const raw = el.namesInput.value.trim();
   if (!raw) return [];
   return unique(raw.split(/[\n,;，；]+/).map((s) => cleanName(s)).filter(Boolean));
+}
+
+/* --------------------------------------------------------------------------
+   xlsx 零依赖解析：ZIP 中央目录 → deflate-raw 解压 → DOMParser 读 XML
+   只产出二维数组 + 抬头信息，列定位 / 分组 / 命名全部复用 parseRosterRows。
+   不引第三方库、CDN 或外部脚本；用户数据只走 textContent，不拼 innerHTML。
+   -------------------------------------------------------------------------- */
+
+/** 能力检测要「真实可行」：光看 typeof 不够，老内核有 DecompressionStream 但只支持 gzip/deflate */
+function supportsDeflateRaw() {
+  try {
+    if (typeof DecompressionStream === 'undefined') return false;
+    new DecompressionStream('deflate-raw');
+    return true;
+  } catch (e) { return false; }
+}
+
+/** 从文件尾往前找 EOCD，再按中央目录逐项登记；不假设任何固定偏移 */
+function readZipEntries(u8, dv) {
+  const SIG_EOCD = 0x06054b50, SIG_CEN = 0x02014b50;
+  let eocd = -1;
+  const floor = Math.max(0, u8.length - 22 - 0xFFFF);
+  for (let i = u8.length - 22; i >= floor; i--) {
+    if (dv.getUint32(i, true) === SIG_EOCD) { eocd = i; break; }
+  }
+  if (eocd < 0) throw Object.assign(new Error('不是有效的 xlsx（找不到 ZIP 中央目录）'), { reason: 'bad-zip' });
+  const count = dv.getUint16(eocd + 10, true);
+  let off = dv.getUint32(eocd + 16, true);
+  const dec = new TextDecoder('utf-8');
+  const map = new Map();
+  for (let n = 0; n < count; n++) {
+    if (off + 46 > u8.length || dv.getUint32(off, true) !== SIG_CEN) {
+      throw Object.assign(new Error('ZIP 中央目录损坏'), { reason: 'bad-zip' });
+    }
+    const method = dv.getUint16(off + 10, true);
+    const compSize = dv.getUint32(off + 20, true);
+    const uncompSize = dv.getUint32(off + 24, true);
+    const nameLen = dv.getUint16(off + 28, true);
+    const extraLen = dv.getUint16(off + 30, true);
+    const commentLen = dv.getUint16(off + 32, true);
+    const localOff = dv.getUint32(off + 42, true);
+    const name = dec.decode(u8.subarray(off + 46, off + 46 + nameLen));
+    map.set(name, { method, compSize, uncompSize, localOff });
+    off += 46 + nameLen + extraLen + commentLen;
+  }
+  return map;
+}
+
+/** 数据起点以 local file header 为准（name/extra 长度可能与中央目录不同） */
+function zipEntryBytes(u8, dv, entry) {
+  const o = entry.localOff;
+  if (o + 30 > u8.length || dv.getUint32(o, true) !== 0x04034b50) {
+    throw Object.assign(new Error('ZIP 条目头损坏'), { reason: 'bad-zip' });
+  }
+  const nameLen = dv.getUint16(o + 26, true);
+  const extraLen = dv.getUint16(o + 28, true);
+  const start = o + 30 + nameLen + extraLen;
+  return u8.subarray(start, start + entry.compSize);   // 尺寸取中央目录，兼容 data descriptor
+}
+
+async function inflateEntry(u8, dv, entry) {
+  const raw = zipEntryBytes(u8, dv, entry);
+  if (entry.method === 0) return raw;                 // stored：直接取字节
+  if (entry.method !== 8) {
+    throw Object.assign(new Error('不支持的 ZIP 压缩方式'), { reason: 'bad-zip' });
+  }
+  if (!supportsDeflateRaw()) {
+    throw Object.assign(new Error('运行环境不支持 deflate-raw'), { reason: 'no-deflate-raw' });
+  }
+  const ds = new DecompressionStream('deflate-raw');
+  const stream = new Blob([raw]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** XML 一律解析成 XML 文档、只取 textContent；解析失败在边界处大声失败 */
+function xmlDoc(bytes) {
+  const text = new TextDecoder('utf-8').decode(bytes).replace(/^\uFEFF/, '');
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (!doc.documentElement || /parsererror/i.test(doc.documentElement.nodeName) ||
+      doc.getElementsByTagName('parsererror').length) {
+    throw Object.assign(new Error('xlsx 内部 XML 无法解析'), { reason: 'bad-xml' });
+  }
+  return doc;
+}
+
+/** 用 localName 取元素，避开默认命名空间 / 前缀差异；带前缀时退回 tagName 兜底 */
+function els(node, local) {
+  let list = node.getElementsByTagNameNS ? Array.from(node.getElementsByTagNameNS('*', local)) : [];
+  if (!list.length) list = Array.from(node.getElementsByTagName(local));
+  return list;
+}
+
+/** sharedStrings：<si> 内的富文本 <si><r><t> 可能有多段，必须拼接 */
+function parseSharedStrings(doc) {
+  return els(doc, 'si').map((si) => els(si, 't').map((t) => t.textContent || '').join(''));
+}
+
+/** A→0, C→2, AC→28；单元格引用里的列字母是唯一可信的列坐标 */
+function colFromLetters(letters) {
+  let n = 0;
+  const s = String(letters).toUpperCase();
+  for (let i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
+  return n - 1;
+}
+
+/**
+ * 按 r="C6" 还原列号，绝不按 <c> 出现顺序 push 进数组 ——
+ * 空单元格会让整行错位，这是本项目最容易翻车的点。
+ */
+function parseSheet(doc, shared) {
+  const rows = [];
+  let maxCol = 0;
+  els(doc, 'row').forEach((rowEl) => {
+    const rAttr = rowEl.getAttribute('r');
+    const rowIdx = rAttr ? parseInt(rAttr, 10) - 1 : rows.length;
+    if (rowIdx < 0) return;
+    if (!rows[rowIdx]) rows[rowIdx] = [];
+    const cells = rows[rowIdx];
+    let autoCol = 0;
+    els(rowEl, 'c').forEach((c) => {
+      const ref = c.getAttribute('r') || '';
+      const m = /^([A-Za-z]+)(\d+)$/.exec(ref);
+      // 标准条目都带 r；缺失时按行内顺序兜底，但也不从 0 重新 push
+      const col = m ? colFromLetters(m[1]) : autoCol;
+      autoCol = col + 1;
+      const t = c.getAttribute('t') || '';
+      let val = '';
+      if (t === 'inlineStr') {
+        const isEl = els(c, 'is')[0];
+        val = isEl ? els(isEl, 't').map((x) => x.textContent || '').join('') : '';
+      } else {
+        const vEl = els(c, 'v')[0];
+        const v = vEl ? (vEl.textContent || '') : '';
+        if (t === 's') {
+          const idx = parseInt(v, 10);
+          val = Number.isFinite(idx) && idx >= 0 ? (shared[idx] || '') : '';
+        } else {
+          val = v;    // 数值 / t="str" / 布尔都取文本
+        }
+      }
+      cells[col] = val;
+      if (col + 1 > maxCol) maxCol = col + 1;
+    });
+  });
+  // 归一成等长二维数组，稀疏空洞补空串，后续按列号取值才稳定
+  for (let i = 0; i < rows.length; i++) {
+    if (!rows[i]) rows[i] = [];
+    for (let j = 0; j < maxCol; j++) if (rows[i][j] === undefined) rows[i][j] = '';
+    rows[i].length = maxCol;
+  }
+  return rows;
+}
+
+/** 工作表路径优先按 workbook.xml + rels 解析，失败则回退到按文件名找 sheet */
+async function resolveSheetPath(entries, getXml) {
+  if (entries.has('xl/workbook.xml') && entries.has('xl/_rels/workbook.xml.rels')) {
+    try {
+      const wb = await getXml('xl/workbook.xml');
+      const sheet = els(wb, 'sheet')[0];
+      const rid = sheet && (sheet.getAttribute('r:id') ||
+        sheet.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id'));
+      const rels = await getXml('xl/_rels/workbook.xml.rels');
+      const rel = rid && els(rels, 'Relationship').find((r) => r.getAttribute('Id') === rid);
+      const target = rel && rel.getAttribute('Target');
+      if (target) return /^\//.test(target) ? target.replace(/^\//, '') : 'xl/' + target.replace(/^\.\//, '');
+    } catch (e) { /* 单个部件损坏时回退到按文件名定位 */ }
+  }
+  const names = [...entries.keys()]
+    .filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(n))
+    .sort((a, b) => parseInt(a.match(/sheet(\d+)/i)[1], 10) - parseInt(b.match(/sheet(\d+)/i)[1], 10));
+  return names[0] || null;
+}
+
+/* 抬头键值：只认「键名 + 冒号」，值全部来自文件运行时文本，源码里不写死任何课程 / 教师名 */
+const HEADER_FIELD_KEYS = [
+  '课程名称', '教学班代码', '授课教师', '任课教师', '课程类型', '开课院系',
+  '学分', '上课时间地点', '学年学期'
+];
+
+function parseHeaderFields(table, headerRow) {
+  const chunks = [];
+  const upto = Math.min(table.length, headerRow < 0 ? XLSX_HEADER_SCAN : headerRow);
+  for (let i = 0; i < upto; i++) {
+    (table[i] || []).forEach((v) => {
+      String(v || '').split(/[\r\n]+/).forEach((line) => {
+        const s = line.replace(/\u3000/g, ' ').trim();
+        if (s) chunks.push(s);
+      });
+    });
+  }
+  const text = chunks.join('\n');
+  const fields = {};
+  HEADER_FIELD_KEYS.forEach((key) => {
+    const re = new RegExp(key + '\\s*[:：]\\s*([^\\r\\n]*)', 'm');
+    const m = re.exec(text);
+    if (!m) return;
+    let val = m[1].trim();
+    // 键与值分列两个单元格时，取紧邻的下一行文本（且不是另一个键）
+    if (!val) {
+      const after = text.slice(m.index + m[0].length).split('\n').find((l) => l.trim());
+      if (after && !HEADER_FIELD_KEYS.some((k) => new RegExp('^' + k + '\\s*[:：]').test(after.trim()))) {
+        val = after.trim();
+      }
+    }
+    // 同一单元格内多键并排时，截掉后续键及其值
+    const cuts = HEADER_FIELD_KEYS.map((k) => val.search(new RegExp(k + '\\s*[:：]'))).filter((x) => x > 0);
+    if (cuts.length) val = val.slice(0, Math.min(...cuts)).trim();
+    if (val) fields[key] = val.replace(/\s+/g, ' ');
+  });
+  return fields;
+}
+
+function buildListName(fields, fallback) {
+  const parts = [fields['课程名称'] || '', fields['教学班代码'] || ''].filter(Boolean);
+  return parts.length ? parts.join(' · ') : (fallback || DEFAULT_GROUP);
+}
+
+/**
+ * 公共入口：xlsx ArrayBuffer → { ok, table, headerRow, fields, listName }
+ * 失败一律归一化成 { ok:false, reason }，调用方只按 reason 出一条 toast，不猜异常。
+ */
+async function parseXlsx(arrayBuffer, fallback) {
+  try {
+    const u8 = new Uint8Array(arrayBuffer);
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    const entries = readZipEntries(u8, dv);
+    const getXml = async (name) => {
+      const entry = entries.get(name);
+      if (!entry) throw Object.assign(new Error('缺少部件 ' + name), { reason: 'bad-zip' });
+      return xmlDoc(await inflateEntry(u8, dv, entry));
+    };
+    const sheetPath = await resolveSheetPath(entries, getXml);
+    if (!sheetPath || !entries.has(sheetPath)) {
+      throw Object.assign(new Error('找不到可读取的工作表（可能已加密 / 受保护）'), { reason: 'no-sheet' });
+    }
+    let shared = [];
+    if (entries.has('xl/sharedStrings.xml')) shared = parseSharedStrings(await getXml('xl/sharedStrings.xml'));
+    const table = parseSheet(await getXml(sheetPath), shared);
+    const headerRow = findHeaderRow(table, XLSX_HEADER_SCAN);
+    const fields = parseHeaderFields(table, headerRow);
+    return { ok: true, table, headerRow, fields, listName: buildListName(fields, fallback) };
+  } catch (e) {
+    return { ok: false, reason: (e && e.reason) || 'bad-xlsx', detail: (e && e.message) || '未知错误' };
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -413,6 +739,9 @@ function buildImportPreview(parts) {
   return {
     items, duplicates, groupMap, issues,
     sources: parts.map((p) => p.file),
+    // xlsx 的抬头名作名单名称；txt / csv 的 displayName 就是文件名，来源行保持原样
+    labels: parts.map((p) => p.displayName || p.file),
+    details: parts.map((p) => p.detail).filter(Boolean),
     hasClassColumn, dropDefault,
     groupCountAppend: unique([...existingGroups, ...groupMap.keys()]).length,
     groupCountReplace: groupMap.size,
@@ -467,7 +796,9 @@ function renderImportStats() {
   const note = mode === 'append' && d.existingCount
     ? ` 当前已有 ${d.existingCount} 人，追加后共 ${groupCount} 个星区${d.dropDefault ? '，未分组的现有学生归入第一片星区' : ''}。`
     : '';
-  el.importSource.textContent = `来源：${d.sources.join('、')}${d.hasClassColumn ? ' · 识别到班级列' : ''}。${note}`;
+  const sourceLabel = (d.labels || d.sources).join('、');
+  const sourceDetail = d.details && d.details.length ? `（${d.details.join('；')}）` : '';
+  el.importSource.textContent = `来源：${sourceLabel}${sourceDetail}${d.hasClassColumn ? ' · 识别到班级列' : ''}。${note}`;
 }
 
 function openImportPreview(parts) {
@@ -538,9 +869,11 @@ function confirmImport() {
   state.allNames = unique([...state.allNames, ...newNames.filter((n) => !calledSet.has(n))]);
   Object.assign(state.groupOf, newGroupOf);
   state.groups = unique([...state.groups, ...Object.values(newGroupOf)]);
-  state.listName = d.sources.length === 1
-    ? d.sources[0].replace(/\.(txt|csv|tsv)$/i, '')
-    : `${d.sources.length} 份名单`;
+  // 抬头信息作名单名称（替换 / 追加两种写入方式都走这一行）；提取不到时回退文件名
+  const labels = d.labels || d.sources;
+  state.listName = labels.length === 1
+    ? labels[0].replace(/\.(txt|csv|tsv|xlsx)$/i, '')
+    : `${labels.length} 份名单`;
 
   ensureGroupCoverage();
   saveState();
@@ -596,17 +929,59 @@ function confirmCalledImport() {
 /* --------------------------------------------------------------------------
    文件入口：拖拽 / 点选
    -------------------------------------------------------------------------- */
+/* 归一化后的错误文案：调用方只按 reason 出一条 toast，异常不许穿透成「未知失败」 */
+const XLSX_ERR = {
+  'no-deflate-raw': '当前浏览器不支持解压 xlsx，请用较新的 Edge / Chrome，或另存为 CSV 后再导入',
+  'bad-zip': '文件不是标准 xlsx（或已加密 / 受保护），请另存为 .xlsx 或 CSV',
+  'bad-xml': 'xlsx 内部数据损坏，请重新另存为 .xlsx 或 CSV',
+  'no-sheet': '没有找到可读取的工作表，请另存为 .xlsx 或 CSV',
+  'no-header': '没有识别到表头行（需含「姓名」等列），请检查点名册格式',
+  'no-data': '没有识别到有效学生行（序号列需为数字、姓名列需非空）',
+  'bad-xlsx': 'xlsx 读取失败，请另存为 .xlsx 或 CSV'
+};
+
 async function handleFiles(fileList, target) {
-  const files = Array.from(fileList).filter((f) => /\.(txt|csv|tsv)$/i.test(f.name) || /text|csv|tsv/.test(f.type));
-  if (!files.length) { toast('请选择 .txt / .csv / .tsv 名单文件'); return; }
+  const all = Array.from(fileList);
+  // 老版二进制 .xls（BIFF8）不在 accept 里，但拖拽仍可能带进来 → 明确提示，不静默失败。
+  // 单实例 toast 会被后一条覆盖，所以无其它可处理文件时，.xls 提示必须是该分支的最终文案。
+  const hasXls = all.some((f) => /\.xls$/i.test(f.name));
+  const files = all.filter((f) => !/\.xls$/i.test(f.name) && (
+    /\.(txt|csv|tsv|xlsx)$/i.test(f.name) || /text|csv|tsv|sheet|excel|openxml/i.test(f.type)
+  ));
+  if (!files.length) {
+    toast(hasXls ? '老版 .xls（BIFF8）暂不支持，请另存为 .xlsx 或 CSV'
+      : '请选择 .txt / .csv / .tsv / .xlsx 名单文件');
+    return;
+  }
+  if (hasXls) toast('已跳过老版 .xls（BIFF8），请另存为 .xlsx 或 CSV');
   const parts = [];
   for (const f of files) {
     try {
-      const text = await f.text();
-      const fallback = f.name.replace(/\.(txt|csv|tsv)$/i, '').trim() || DEFAULT_GROUP;
-      parts.push({ file: f.name, ...parseRoster(text, fallback) });
+      if (/\.xlsx$/i.test(f.name)) {
+        const res = await parseXlsx(await f.arrayBuffer(), f.name.replace(/\.xlsx$/i, '').trim() || DEFAULT_GROUP);
+        if (!res.ok) { toast(XLSX_ERR[res.reason] || XLSX_ERR['bad-xlsx']); continue; }
+        // 无班级列时组名沿用 DEFAULT_GROUP，保证「预览星区数 = 落地星区数」；
+        // 抬头名只作 state.listName / 来源行，不另起分组口径。
+        const parsed = parseRosterRows(res.table, DEFAULT_GROUP, { strictRows: true, headerScan: XLSX_HEADER_SCAN });
+        if (!parsed.items.length) {
+          toast(res.headerRow < 0 ? XLSX_ERR['no-header'] : XLSX_ERR['no-data']);
+          continue;
+        }
+        const teacher = res.fields['授课教师'] || res.fields['任课教师'] || '';
+        parts.push({
+          file: f.name,
+          displayName: res.listName,
+          detail: teacher ? `授课教师：${teacher}` : '',
+          ...parsed
+        });
+      } else {
+        const text = await f.text();
+        const fallback = f.name.replace(/\.(txt|csv|tsv)$/i, '').trim() || DEFAULT_GROUP;
+        parts.push({ file: f.name, displayName: f.name, ...parseRoster(text, fallback) });
+      }
     } catch (e) {
-      toast(`读取 ${f.name} 失败`);
+      // 读取 / 解析异常归一成明确 toast，不穿透、不静默（runtime-defensive）
+      toast(`读取 ${f.name} 失败：${(e && e.message) || '文件无法解析'}`);
     }
   }
   if (!parts.length) return;

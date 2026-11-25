@@ -147,9 +147,9 @@
           <svg class="icon drop-icon"><use href="#i-upload" /></svg>
           <div class="drop-zone-text">
             <div class="drop-zone-main">拖入名单文件，或点击选择</div>
-            <div class="drop-zone-sub">支持 .txt / .csv / .tsv，可一次选多份；有班级列或分文件时自动分星区</div>
+            <div class="drop-zone-sub">支持 .txt / .csv / .tsv / .xlsx 点名册，可一次选多份；有班级列或分文件时自动分星区</div>
           </div>
-          <input type="file" id="fileInput" accept=".txt,.csv,.tsv,text/plain,text/csv" multiple hidden>
+          <input type="file" id="fileInput" accept=".txt,.csv,.tsv,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
         </div>
 
         <label class="sr-only" for="namesInput">名单文本，每行一个姓名</label>
@@ -196,7 +196,7 @@
       <div class="called-list" id="calledList" aria-label="已点名单列表"></div>
       <div id="calledDropHint" class="drop-hint">也可把已点名单文件拖到这里</div>
       <div class="save-note">自动保存在当前浏览器；跨设备可导出后「传回」续点，或用「同步」提交到 GitHub。</div>
-      <input type="file" id="calledFileInput" accept=".txt,.csv,.tsv,text/plain,text/csv" hidden>
+      <input type="file" id="calledFileInput" accept=".txt,.csv,.tsv,.xlsx,text/plain,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
     </div>
   </aside>
 
