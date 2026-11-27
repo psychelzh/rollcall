@@ -112,6 +112,7 @@
             <div class="star-overlay">
               <div id="starGroupName" class="star-group-name"></div>
               <div id="starName" class="star-name"></div>
+              <div id="pickAttendance" class="pick-attendance" role="group" aria-label="标记到班状态" hidden></div>
               <div id="starProgress" class="star-progress"></div>
             </div>
             <div class="star-legend" id="starLegend"></div>
@@ -186,6 +187,7 @@
         <button class="icon-btn" id="closeCalledDrawer" type="button" aria-label="关闭已点名单"><svg
             class="icon"><use href="#i-x" /></svg></button>
       </div>
+      <div id="attendanceSummary" class="attendance-summary" aria-live="polite"></div>
       <div class="called-actions">
         <button id="importCalled" class="small ghost" type="button" title="把导出的已点名单文件传回">传回</button>
         <button id="copyCalled" class="small ghost" type="button">复制</button>

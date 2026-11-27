@@ -11,6 +11,13 @@ const KEY_THEME = 'rollcall_theme_v1';
 const KEY_SOUND = 'rollcall_sound_v1';
 const KEY_SYNC_REPO = 'rollcall_sync_repo_v1';
 const SESSION_TOKEN = 'rollcall_pat_session_v1';
+const KEY_ATTENDANCE = 'rollcall_attendance_v1';
+/* 三态中文标签只在此处定义一次；反向映射由它生成，避免标签散落多处 */
+const ATT = Object.freeze({ PRESENT: 'present', ABSENT: 'absent', LEAVE: 'leave' });
+const ATT_LABEL = Object.freeze({ [ATT.PRESENT]: '到', [ATT.ABSENT]: '未到', [ATT.LEAVE]: '请假' });
+const ATT_NONE_LABEL = '未标';   // 中性占位文案集中定义，与三态标签同一处
+const ATT_BY_LABEL = Object.freeze(Object.fromEntries(Object.entries(ATT_LABEL).map(([k, v]) => [v, k])));
+const REPEATABLE_ATT = new Set([ATT.ABSENT, ATT.LEAVE]);
 const LEGACY = {
   all: 'rollcall_all_names_v1',
   called: 'rollcall_called_names_v1',
@@ -37,10 +44,10 @@ const el = {};
   'namesInputTitle', 'namesInputTitleText', 'namesInput', 'namesHint',
   'rosterBtn', 'rosterDrawer', 'closeRosterDrawer', 'listBody', 'pendingList', 'pendingCount',
   'dropZone', 'fileInput', 'shuffle', 'clearAll', 'totalCount', 'remainingCount',
-  'starView', 'starCanvas', 'starGroupName', 'starName', 'starProgress', 'starLegend',
+  'starView', 'starCanvas', 'starGroupName', 'starName', 'pickAttendance', 'starProgress', 'starLegend',
   'toggleRollBtn',
   'calledPanelBtn', 'calledDrawer', 'closeCalledDrawer',
-  'calledList', 'calledDropHint', 'calledCount', 'calledFileInput',
+  'calledList', 'calledDropHint', 'calledCount', 'attendanceSummary', 'calledFileInput',
   'importCalled', 'copyCalled', 'exportCalled', 'quickSync', 'clearCalled',
   'importFromGitHub', 'githubModal', 'closeModal', 'githubRepo', 'fetchCSV', 'csvFiles',
   'importModal', 'closeImportModal', 'cancelImport', 'confirmImport',
@@ -290,6 +297,80 @@ function loadState() {
 }
 
 /* --------------------------------------------------------------------------
+   出勤状态：独立 key，不进 state_v2；读取在边界归一化，坏数据不崩
+   -------------------------------------------------------------------------- */
+let attendance = Object.create(null);
+
+function loadAttendance() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(KEY_ATTENDANCE) || 'null'); } catch (e) { /* 坏数据不崩 */ }
+  attendance = Object.create(null);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+  Object.keys(raw).forEach((name) => {
+    const v = raw[name];
+    if (typeof name === 'string' && name.trim() && Object.prototype.hasOwnProperty.call(ATT_LABEL, v)) {
+      attendance[name] = v;
+    }
+  });
+}
+
+function saveAttendance() {
+  try {
+    // 全未标时不留空 key，与「未标记不写入」保持一致
+    if (Object.keys(attendance).length) localStorage.setItem(KEY_ATTENDANCE, JSON.stringify(attendance));
+    else localStorage.removeItem(KEY_ATTENDANCE);
+  } catch (e) { console.warn('出勤状态保存失败', e); }
+}
+
+function clearAttendance() {
+  attendance = Object.create(null);
+  try { localStorage.removeItem(KEY_ATTENDANCE); } catch (e) { /* 隐私模式 */ }
+}
+
+function setAttendance(name, status) {
+  if (!name || !Object.prototype.hasOwnProperty.call(ATT_LABEL, status)) return false;
+  if (attendance[name] === status) return false;
+  attendance[name] = status;
+  saveAttendance();
+  return true;
+}
+
+/** 抽屉里逐人改态：未标 → 到 → 未到 → 请假 → 未标；最后一步清掉该人记录 */
+function cycleAttendance(name) {
+  const order = [ATT.PRESENT, ATT.ABSENT, ATT.LEAVE];
+  const idx = order.indexOf(attendance[name]);
+  if (idx === order.length - 1) {
+    if (!attendance[name]) return false;
+    delete attendance[name];
+    saveAttendance();
+    return true;
+  }
+  return setAttendance(name, order[idx + 1]);
+}
+
+function attendanceCounts() {
+  const counts = { present: 0, absent: 0, leave: 0 };
+  state.calledNames.forEach((name) => {
+    const s = attendance[name];
+    if (Object.prototype.hasOwnProperty.call(counts, s)) counts[s]++;
+  });
+  return counts;
+}
+
+/** 抽取候选：待点名单 ∪ 已点里出勤为可重抽状态的人（其记录与星点保持不变） */
+function drawPool() {
+  return unique([...state.allNames, ...state.calledNames.filter((n) => REPEATABLE_ATT.has(attendance[n]))]);
+}
+
+/** 复制 / 导出 / 同步共用：未标记的人只写姓名，旧版本传回仍兼容 */
+function formatCalledExport() {
+  return state.calledNames.map((name) => {
+    const s = attendance[name];
+    return s ? `${name}\t${ATT_LABEL[s]}` : name;
+  }).join('\n');
+}
+
+/* --------------------------------------------------------------------------
    名单解析：纯文本 / CSV / TSV / xlsx 共用同一套「二维表格」逻辑
    xlsx 只负责把文件解成 table，列定位 / 分组 / 去重 / 命名全部走这里
    -------------------------------------------------------------------------- */
@@ -456,12 +537,31 @@ function parseRosterRows(table, fallbackGroup, opts = {}) {
   };
 }
 
-/** 纯文本入口：转成二维数组后交给 parseRosterRows，行为与历史版本一致 */
+/** 纯文本入口：转成二维数组后交给 parseRosterRows；兼容「姓名<TAB>状态」的传回行 */
 function parseRoster(text, fallbackGroup) {
   const rows = splitRows(text);
   if (!rows.length) return { items: [], issues: ['文件里没有可识别的内容'], hasClassColumn: false, meta: null };
   const delim = detectDelimiter(rows[0]);
-  const table = rows.map((r) => parseLine(r, delim));
+  let table = rows.map((r) => parseLine(r, delim));
+  let statusMap = null;
+  if (delim === '\t') {
+    // 只有出现合法状态列才改列口径：纯姓名 / 普通 TSV 名单走原来的解析路径
+    const hasStatus = table.some((cells) => ATT_BY_LABEL[(cells[1] || '').trim()]);
+    if (hasStatus) {
+      statusMap = Object.create(null);
+      table = table.map((cells) => {
+        const status = ATT_BY_LABEL[(cells[1] || '').trim()];
+        const name = cleanName(cells[0]);
+        if (name && status) statusMap[name] = status;
+        return [cells[0]];
+      });
+    }
+  }
+  if (statusMap) {
+    const result = parseRosterRows(table, fallbackGroup);
+    result.items.forEach((it) => { if (statusMap[it.name]) it.attendance = statusMap[it.name]; });
+    return result;
+  }
   return parseRosterRows(table, fallbackGroup);
 }
 
@@ -855,7 +955,7 @@ function confirmImport() {
     state.allNames = [];
     state.groupOf = {};
     state.groups = [];
-    if (resetCalled) state.calledNames = [];
+    if (resetCalled) { state.calledNames = []; clearAttendance(); }
     state.listName = '';
   } else if (d.dropDefault) {
     // 撤掉此前自动兜底的「全班」标签：预览报几个星区，落地就是几个
@@ -893,11 +993,18 @@ function confirmImport() {
 function openCalledImportPreview(parts) {
   const ordered = unique(parts.flatMap((p) => p.items.map((it) => it.name)));
   const existing = new Set(state.calledNames);
+  const incomingAttendance = Object.create(null);
+  parts.forEach((p) => (p.items || []).forEach((it) => {
+    if (it.attendance && Object.prototype.hasOwnProperty.call(ATT_LABEL, it.attendance)) {
+      incomingAttendance[it.name] = it.attendance;
+    }
+  }));
   pendingCalledImport = {
     toAdd: ordered.filter((n) => !existing.has(n)),
     skipped: ordered.filter((n) => existing.has(n)),
     sources: parts.map((p) => p.file),
-    issues: parts.flatMap((p) => p.issues)
+    issues: parts.flatMap((p) => p.issues),
+    attendance: incomingAttendance
   };
   const d = pendingCalledImport;
   el.calledImportSource.textContent = `来源：${d.sources.join('、')}`;
@@ -916,6 +1023,11 @@ function confirmCalledImport() {
   const addSet = new Set(toAdd);
   state.allNames = state.allNames.filter((n) => !addSet.has(n));
   state.calledNames = [...state.calledNames, ...toAdd];
+  // 与 calledNames 同一个事务边界内合并出勤状态：纯姓名行不写状态
+  const incoming = pendingCalledImport.attendance || {};
+  const calledSet = new Set(state.calledNames);
+  Object.keys(incoming).forEach((name) => { if (calledSet.has(name)) attendance[name] = incoming[name]; });
+  saveAttendance();
   ensureGroupCoverage();
   saveState();
   syncTextarea();
@@ -1010,13 +1122,14 @@ function bindDrop(zone, target, classNames) {
    -------------------------------------------------------------------------- */
 function startRoll() {
   if (state.rolling) return;
-  if (!state.allNames.length) { toast('名单为空，请先导入名单'); return; }
+  const pool = drawPool();
+  if (!pool.length) { toast('名单为空，请先导入名单'); return; }
   state.rolling = true;
   state.lastShown = '';
   state.lit = null;
   rollTimer = setInterval(() => {
-    if (!state.allNames.length) return;
-    const pick = state.allNames[Math.floor(Math.random() * state.allNames.length)];
+    if (!pool.length) return;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
     state.highlight = pick;
     state.lastShown = pick;
     showRolling(pick);
@@ -1031,7 +1144,7 @@ function stopRoll() {
   state.rolling = false;
   const chosen = state.lastShown;
   renderRollButtons();
-  if (!chosen || !state.allNames.includes(chosen)) { state.highlight = ''; renderAll({ keepResult: false }); return; }
+  if (!chosen || !drawPool().includes(chosen)) { state.highlight = ''; renderAll({ keepResult: false }); return; }
   markName(chosen);
 }
 
@@ -1062,6 +1175,8 @@ function updateCounts() {
   el.totalCount.textContent = '总数: ' + allStudents().length;
   el.remainingCount.textContent = '剩余: ' + state.allNames.length;
   el.calledCount.textContent = '已点 ' + state.calledNames.length + ' 人';
+  const a = attendanceCounts();
+  el.attendanceSummary.textContent = `已点 ${state.calledNames.length} 人 · ${ATT_LABEL.present} ${a.present} · ${ATT_LABEL.absent} ${a.absent} · ${ATT_LABEL.leave} ${a.leave}`;
   renderPendingList();
 }
 
@@ -1107,8 +1222,9 @@ function updateUIState() {
   const hasNames = state.allNames.length > 0;
   const hasAny = hasNames || state.calledNames.length > 0;
   const hasCalled = state.calledNames.length > 0;
-  el.toggleRollBtn.disabled = !hasNames;
-  el.toggleRollBtn.classList.toggle('ghost', !hasNames);
+  const canRoll = drawPool().length > 0;   // 未到/请假者虽在已点名单，仍可再次被抽
+  el.toggleRollBtn.disabled = !canRoll;
+  el.toggleRollBtn.classList.toggle('ghost', !canRoll);
   el.shuffle.disabled = !hasNames;
   el.clearAll.disabled = !hasAny;
   el.copyCalled.disabled = !hasCalled;
@@ -1146,6 +1262,17 @@ function renderCalledList() {
         tag.textContent = state.groupOf[name];
         left.appendChild(tag);
       }
+      // 出勤标识是真 button：DOM API + textContent 写入，用户姓名不进 innerHTML
+      const status = document.createElement('button');
+      status.type = 'button';
+      status.className = 'called-status';
+      status.dataset.attName = name;
+      const current = attendance[name] || '';
+      const label = current ? ATT_LABEL[current] : ATT_NONE_LABEL;
+      status.dataset.att = current || 'none';
+      status.textContent = label;
+      status.setAttribute('aria-pressed', String(!!current));
+      status.setAttribute('aria-label', `${name} 出勤状态：${label}，点击切换`);
       const right = document.createElement('div');
       right.className = 'called-item-actions';
       const rm = document.createElement('button');
@@ -1155,6 +1282,7 @@ function renderCalledList() {
       rm.dataset.action = 'remove';
       right.appendChild(rm);
       row.appendChild(left);
+      row.appendChild(status);
       row.appendChild(right);
       frag.appendChild(row);
     });
@@ -1163,7 +1291,26 @@ function renderCalledList() {
   el.calledList.appendChild(frag);
 }
 
+/** 结果区三态条：按钮由 ATT_LABEL 生成，再抽中同一人保留上次选择且可改 */
+function renderPickAttendance(name) {
+  const bar = el.pickAttendance;
+  bar.innerHTML = '';
+  if (!name || !state.calledNames.includes(name)) { bar.hidden = true; return; }
+  bar.hidden = false;
+  Object.entries(ATT_LABEL).forEach(([status, label]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'small ghost';
+    btn.textContent = label;
+    btn.dataset.attendance = status;
+    btn.setAttribute('aria-pressed', String(attendance[name] === status));
+    btn.setAttribute('aria-label', `${label}：${name}`);
+    bar.appendChild(btn);
+  });
+}
+
 function showIdle() {
+  el.pickAttendance.hidden = true;
   el.starName.textContent = state.allNames.length
     ? '等待点名'
     : (state.calledNames.length ? '全部已点亮' : '还没有名单，点头部的「名单」按钮导入');
@@ -1176,9 +1323,11 @@ function showResult(name) {
   el.starName.textContent = name;
   el.starName.classList.remove('is-rolling', 'is-idle');
   el.starGroupName.textContent = state.groups.length > 1 ? (state.groupOf[name] || '') : '';
+  renderPickAttendance(name);
 }
 
 function showRolling(name) {
+  el.pickAttendance.hidden = true;
   el.starName.classList.remove('is-idle');
   el.starName.classList.add('is-rolling');
   el.starName.textContent = name;
@@ -1886,7 +2035,7 @@ el.submitSync.addEventListener('click', async () => {
     const url = await createPullRequestFlow({
       token, repo, branch,
       filePath: el.syncPath.value.trim(),
-      contentBase64: utf8ToB64(state.calledNames.join('\n')),
+      contentBase64: utf8ToB64(formatCalledExport()),
       prTitle: el.syncTitleInput.value.trim()
     });
     el.syncStatus.textContent = '';
@@ -1934,6 +2083,19 @@ el.pendingList.addEventListener('click', (e) => {
   if (!name || !state.allNames.includes(name)) return;
   if (state.rolling) { toast('请先停止滚动再标记'); return; }
   markName(name);
+});
+
+/* 三态标记：只写独立 key，不阻塞再次滚动；状态改变才给轻提示 */
+el.pickAttendance.addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-attendance]');
+  if (!btn || el.pickAttendance.hidden || state.rolling) return;
+  const name = state.calledNames[0];
+  const status = btn.dataset.attendance;
+  if (!name || !Object.prototype.hasOwnProperty.call(ATT_LABEL, status)) return;
+  if (!setAttendance(name, status)) return;
+  renderPickAttendance(name);
+  updateCounts();
+  toast(`已标记 ${name}：${ATT_LABEL[status]}`);
 });
 
 el.dropZone.addEventListener('click', () => el.fileInput.click());
@@ -1997,6 +2159,25 @@ el.namesInput.addEventListener('input', () => {
 });
 
 el.calledList.addEventListener('click', (e) => {
+  const attBtn = e.target.closest('button[data-att-name]');
+  if (attBtn) {
+    const name = attBtn.dataset.attName;
+    if (!name || !state.calledNames.includes(name)) return;
+    const keepFocus = document.activeElement === attBtn;
+    if (!cycleAttendance(name)) return;
+    updateCounts();
+    renderCalledList();
+    if (el.starName.textContent === name) renderPickAttendance(name);
+    if (keepFocus) {
+      const next = Array.from(el.calledList.querySelectorAll('button[data-att-name]'))
+        .find((b) => b.dataset.attName === name);
+      if (next) next.focus();
+    }
+    toast(attendance[name]
+      ? `已标记 ${name}：${ATT_LABEL[attendance[name]]}`
+      : `已清除 ${name} 的出勤标记`);
+    return;
+  }
   const btn = e.target.closest('button[data-action="remove"]');
   if (!btn) return;
   const idx = parseInt(btn.closest('.called-item').dataset.idx, 10);
@@ -2004,6 +2185,7 @@ el.calledList.addEventListener('click', (e) => {
   if (!name) return;
   state.calledNames.splice(idx, 1);
   state.allNames.push(name);
+  delete attendance[name]; saveAttendance();
   ensureGroupCoverage();
   saveState();
   syncTextarea();
@@ -2025,6 +2207,7 @@ el.clearAll.addEventListener('click', () => {
   if (!confirm('确认清空全部名单吗？待点名单和已点记录都会被清空，此操作不可恢复。')) return;
   state.allNames = []; state.calledNames = []; state.groupOf = {}; state.groups = []; state.listName = '';
   state.lit = null; state.highlight = '';
+  clearAttendance();
   ensureGroupCoverage();
   saveState();
   syncTextarea();
@@ -2038,6 +2221,7 @@ el.clearCalled.addEventListener('click', () => {
   state.allNames = unique([...state.allNames, ...state.calledNames]);
   state.calledNames = [];
   state.lit = null;
+  clearAttendance();
   ensureGroupCoverage();
   saveState();
   syncTextarea();
@@ -2048,7 +2232,7 @@ el.clearCalled.addEventListener('click', () => {
 
 el.copyCalled.addEventListener('click', async () => {
   try {
-    await navigator.clipboard.writeText(state.calledNames.join('\n'));
+    await navigator.clipboard.writeText(formatCalledExport());
     toast('已复制到剪贴板');
   } catch (e) {
     toast('复制失败，请用「导出」保存文件');
@@ -2056,7 +2240,7 @@ el.copyCalled.addEventListener('click', async () => {
 });
 
 el.exportCalled.addEventListener('click', () => {
-  const blob = new Blob([state.calledNames.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const blob = new Blob([formatCalledExport()], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -2159,6 +2343,7 @@ function init() {
   initSound();
   readStarTokens();
   loadState();
+  loadAttendance();
   syncTextarea();
   updateNamesTitle();
   star.ctx = el.starCanvas.getContext('2d');
